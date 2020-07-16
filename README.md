@@ -16,4 +16,4 @@ The main idea, inspired by ITU V150.1, is to transport over IP "only the require
   - [Planned] Same hardware setup as when "acting as a user" - needs to find a solution for "virtual ring detection"
     This solution is required to allow simple micro-server BBS setup running on vintage real hardware
     
-Current implementation allows only "acting as a user" mode, with both direct and indirect connected Minitel terminal. The WebSocket server might be known in Yellow Pages reference or fully selected at the provided requestor. It needs the use of an updated version of Zigazou's PyMinitel library forked here (https://github.com/64rulez/PyMinitel).
+Current implementation allows only "acting as a user", with both direct and indirect connected Minitel terminal. The WebSocket server might be known in Yellow Pages reference or fully selected at the provided requestor. It needs the use of an updated version of Zigazou's PyMinitel library forked here (https://github.com/64rulez/PyMinitel).
