@@ -17,3 +17,32 @@ The main idea, inspired by ITU V150.1, is to transport over IP "only the require
     This solution is required to allow simple micro-server BBS setup running on vintage real hardware
     
 Current implementation allows only "acting as a user", with both direct and indirect connected Minitel terminal. The WebSocket server might be known in Yellow Pages reference or fully selected at the provided requestor. It needs the use of an updated version of Zigazou's PyMinitel library forked here (https://github.com/64rulez/PyMinitel).
+
+
+[Edit 05/2021]
+
+PyMoIP - aka Python Minitel Over IP
+
+The goal of this project is to propose some technical solutions to allow French Minitel (officially abandonned in 2012) to be usable in our "modern world". This project is currently getting 3 main parts - a 4th one is projected.
+
+Some other project have inspired this - Zigazou's HaMinitel, MiEdit, PyMinitel & CQuest's  
+
+Summary :
+- Part 1 : "User"
+
+This code allows the usage of a legacy Minitel terminal on "modern" WebSocket based servers [As of nowaday, most remaining Minitel servers are WebSocket based]. The main idea beeing to avoid any terminal restrictions (IE : *any* Minitel from the very first prototype to last WebPhones). It supports (at least V23) Hayes compatible modems to permit a direct link to the Web even to terminals without serial port. Historically, after releases of Minitel 2 & 5, serial ports became not mandatory and most modern terminals had only modems. Without this code, those terminals are only usable over VoIP, what is quite problematic. Newer versions will include 8 bits support for photo display [MagisClub/M2 Photo/iTimtel].
+
+
+- Part 2 : "Server"
+
+This code allow the easy creation of WebSocket based Minitel modular servers. Most of the job is handled by this server code, leaving creativity to build dedicated modules (games, chat, whatever). Videotext page creation might be done nowadays with Zigazou's MiEdit or, in a more rustic way, with logicos's Concept software.
+
+
+- Part 3 : "Gateway"
+
+This code allows the usage of "legacy" Minitel emulators that were able to use Telnet protocol, such as iTimtel or Hyperterminal on WebSocket based servers. Additionally, the gateway will try to mimic PAVI operation.
+
+
+- Part 4 : planned (No name yet - something as "Minitel Modem server") 
+
+A piece of code similar to PyMoIP-User but specific for "legacy" servers. By the ancien times, some peoples used to run Minitel based BBS servers (called in French Micro-serveurs). Those servers where mostly using a minitel as a cheap modem. While this technique was smart by the time, it became very complicated over VoIP and is unreachable from a WebSocket (or telnet) emulator.
