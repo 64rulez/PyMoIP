@@ -1,0 +1,29 @@
+This code was written in spring 2020 and was abandonned for something as 9 months. It was my first programming attempts with Python.
+
+It's functionnal but depends excessively over PyMinitel (by Zigazou) - not that his code is bad, it's just not that much adapted to what I intended to made.
+
+Currently, the 'v1' will :
+- Ask for a serial port to use
+- Check for a Minitel or an Hayes modem
+
+[Specific to Hayes operation]
+- Needs a fantom phone line (see provided easy schematic elsewhere)
+- Needs a v23 compatible modem [tested with a regular USR Sportster], a serial port and the proper serial cable
+- Initiate a call from the Minitel (IE : Press Connexion/Fin key (or whatever similar key or dial something) on the Minitel)
+- Answer the call with the modem by pressing the 'A' key from your console
+- Hangup the call by pressin the 'H' key from your console
+- Key 'T' will toggle DTR line
+
+[Specific to Minitel operation]
+- Needs a serial port and a serial to minitel cable
+
+[Operation]
+- Key 'ESC' from the console will close the WS session and revert to the selection page
+- Key 'D' will toggle 'Debug/Dump' mode
+- Key 'S' will display complete serial port status
+
+From the selection page, you'll be able to enter the 'short name' of the WS server to connect. 
+- A lookup on 'yellow pages' reference will be done to get the proper connection parameters
+- If the server exists, if it's up & running, a WebSocket session will be openned on this server. Any key typed from the Minitel will be sent to the server, any data from the server will be sent to the Minitel.
+- At the end of the WS session, you'll be back to the selection page - You may also revert to the selection page by pressing 'Connexion/Fin' key on the Minitel
+- It's also possible to select any WS server (unknown to Yellow pages) by typing the entire URL from the selection page
