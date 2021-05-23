@@ -1,0 +1,18 @@
+2021-04-29 11:20:12,028 [INFO] Launching a WebSocket Server on port '9000'
+2021-04-29 11:21:02,748 [INFO] Launching a WebSocket Server on port '9000'
+2021-04-29 11:23:30,019 [INFO] Keyboard interrupt detected
+2021-04-29 11:23:30,020 [INFO] Shutting down server
+2021-04-29 11:23:30,024 [INFO] Server shutdown. Good bye!!
+2021-04-29 11:23:43,787 [INFO] Launching a TCP Server on port '9000'
+2021-04-29 11:23:50,482 [INFO] 0 joined.
+2021-04-29 11:23:50,484 [ERROR] Task exception was never retrieved
+future: <Task finished coro=<MudServer._register_tcp() done, defined at /home/pi/python/swampymud-0.2.0-bis/swampymud/mudserver.py:115> exception=AttributeError("'str' object has no attribute 'random_cls'")>
+Traceback (most recent call last):
+  File "/home/pi/python/swampymud-0.2.0-bis/swampymud/mudserver.py", line 132, in _register_tcp
+    self.on_player_join(pid)
+  File "/home/pi/python/swampymud-0.2.0-bis/swampymud/mudserver.py", line 317, in on_player_join
+    PlayerCls = self.world.random_cls()
+AttributeError: 'str' object has no attribute 'random_cls'
+2021-04-29 11:40:54,836 [INFO] Keyboard interrupt detected
+2021-04-29 11:40:54,838 [INFO] Shutting down server
+2021-04-29 11:40:54,839 [INFO] Server shutdown. Good bye!!
