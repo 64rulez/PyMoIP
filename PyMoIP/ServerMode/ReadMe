@@ -1,0 +1,17 @@
+As of 23/05/2021 :
+
+The server (server.py) will listen on port 8765 and will accept any (as mush as can be handled by your system) WS connection from any @IP of your system.
+
+The server will 'boot' from 'arbo/arbo_start.py' and needs 'arbo/arbo_defaultvars.py'. It'll provide Videotext pages as descriped in this 'arbo' file and all related ones.
+The server comes with a single module 'module_menu.py' that should be located in the same folder.
+
+No documentation is yet provided.
+==> You need to understand how provided 'arbo files' are organized to create your own server for the moment.
+==> You need to understand how provided 'module file' is organized to create your own modules for the moment.
+
+Work still on progress :
+- Timeout, Timer, and disconnection codes
+- Some proper logging features, less verbose debug messages
+- Review some variables operation
+- Review/complete ListSession[] variable
+- 'Smart' communication with the gateway
