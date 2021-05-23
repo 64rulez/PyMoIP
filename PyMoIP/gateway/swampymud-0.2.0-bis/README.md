@@ -1,7 +1,7 @@
-Based uppon SwampyMud - but it's not SwampyMud any more ....
+Was based uppon SwampyMud - but it's not SwampyMud any more ....
 
 Listen for telnet on port 9000 and for WS on port 9001
-Will call to port 8765 in WS
+Call to port 8765 in WS
 
 [Too many logs ... and all MUD functionalities to be removed]
 
