@@ -1,9 +1,9 @@
 # PyMoIP
 Python "Modem over IP" for Minitel
 
-The aim of this project is to try to provide a technical alternative to VoIP, in order to allow the usage of French Minitel terminals in this modern era, where PSTN technology is disapearing from the entire planet.
+The aim of this project is to try to provide some technical alternatives to VoIP, in order to allow the usage of French Minitel terminals in this modern era, where PSTN technology is disapearing from the entire planet.
 
-As VoIP seems to be the natural replacement to classical PSTN transport, many drawbacks observed (mostly related to quality and stability of the V23 link) make think that this solution is not acceptable. Regular FAX transport have been adapted to IP with T38 and is now well supported. Regular modem transport have been adapted to IP with V150.1 but this approach remains unreachable to normal people due to the ultra high cost of the hardware available.
+As VoIP seems to be the natural replacement to classical PSTN transport, many drawbacks are observed (mostly related to quality and stability of the V23 link) make think that this solution is not acceptable. Regular FAX transport have been adapted to IP with T38 and is now well supported. Regular modem transport have been adapted to IP with V150.1 but this approach remains unreachable to normal people due to the ultra high cost of the rare hardware available.
 
 The main idea, inspired by ITU V150.1, is to transport over IP "only the required data" and not "the sound of data". Several usages are to be considerated :
 - Acting as a user :
@@ -30,7 +30,7 @@ Some other project have inspired this - Zigazou's HaMinitel, MiEdit, PyMinitel &
 Summary :
 - Part 1 : "User"
 
-This code allows the usage of a legacy Minitel terminal on "modern" WebSocket based servers [As of nowaday, most remaining Minitel servers are WebSocket based]. The main idea beeing to avoid any terminal restrictions (IE : *any* Minitel from the very first prototype to last WebPhones). It supports (at least V23) Hayes compatible modems to permit a direct link to the Web even to terminals without serial port. Historically, after releases of Minitel 2 & 5, serial ports became not mandatory and most modern terminals had only modems. Without this code, those terminals are only usable over VoIP, what is quite problematic. Newer versions will include 8 bits support for photo display [MagisClub/M2 Photo/iTimtel].
+This code allows the usage of a legacy Minitel terminal on "modern" WebSocket based servers [As of nowaday, most remaining Minitel servers are WebSocket based]. The main idea beeing to avoid any terminal restrictions (IE : *any* Minitel from the very first prototype to last WebPhones). It supports (at least V23) Hayes compatible modems to permit a direct link to the Web even for terminals without serial port. Historically, after the releases of Minitel 2 & 5, serial ports became not mandatory and 'modernest' terminals had only modems. Without this code, those terminals are only usable over VoIP, what is quite problematic. Newer versions will include 8 bits support for photo display [MagisClub/M2 Photo/iTimtel].
 
 
 - Part 2 : "Server"
