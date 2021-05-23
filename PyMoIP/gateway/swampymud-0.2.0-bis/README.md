@@ -1,4 +1,11 @@
-﻿# SwampyMud
+Based uppon SwampyMud - but it's not SwampyMud any more ....
+
+Listen for telnet on port 9000 and for WS on port 9001
+Will call to port 8765 in WS
+
+[Too many logs ... and all MUD functionalities to be removed]
+
+# SwampyMud
 
 Multi-user dungeons, or "MUDs" are text-based role-playing games, that naturally evolved from the text-based rpg and adventure games of the 1970s.
 This project aims to introduce a new generation—one that never experienced a world without broadband internet—to this classic game genre.
