@@ -2,30 +2,6 @@ import sys        # Pour les messages d'erreur
 import asyncio    # Pour await/async
 import threading  # Necessaire pour asyncio local (il faut une autre thread pour faire une autre boucle asyncio - sinon, la coroutine async n'est jamais executee dans le module [avant la fin])
 
-def comment():
-  #
-  # Ceci est une variable locale
-  #
-  zizi="Variable locale"
-  #
-  # Variables globales
-  #
-  global_refs['pet_06']='truc_bar'    # Modification d'une variable globale
-  #
-  print("Zizi est : " + zizi)
-  print("Pet_05 est : " + global_refs['pet_05'])
-  #
-  # Variables locales ‡ hello (module parent)
-  #
-  print(local_refs['Blabla'])
-  (local_refs['Blabla'])='BarWozHere'  # Modification d'une variable locale au module parent ==> Ne fonctionne pas !!!
-  print(local_refs['Blabla'])
-  #
-  # Objet local ‡ hello (module parent)
-  #
-  print("Item d'un objet du module parent : " + (local_refs['MyArbo']).ArboCur)
-  (local_refs['MyArbo']).ArboCur="BarWazHereToo"    # Modification d'un objet local au module parent
-
 #https://stackoverflow.com/questions/55409641/asyncio-run-cannot-be-called-from-a-running-event-loop
 class RunThread(threading.Thread):
     def __init__(self, func, args, kwargs):
@@ -54,7 +30,7 @@ def run_async(func, *args, **kwargs):
           print('Starting new event loop')
         return asyncio.run(func(*args, **kwargs))
 
-def HandleError():      # Ici, MyArbo n'est pas nÈcessairement dÈfini .... On utilise (local_refs['MyArbo']).
+def HandleError():      # Ici, MyArbo n'est pas n√©cessairement d√©fini .... On utilise (local_refs['MyArbo']).
     print ("ERR:"+__file__+"() "+str(sys.exc_info()[0])+" "+str(sys.exc_info()[1])+" "+str(sys.exc_info()[2]))
     err=sys.exc_info()
     cnt=0
@@ -78,7 +54,7 @@ def init(global_refs,local_refs,comment):
   #  
   #    init() Est appelee lors de l'initialisation du module (changement de position dans l'arbo)
   #    
-  #    Permet d'initialiser des variables qui seront utilisÈes plus tard dans le traitement des touches, charger des fichiers, etc
+  #    Permet d'initialiser des variables qui seront utilis√©es plus tard dans le traitement des touches, charger des fichiers, etc
   #       
   #
   EnableTrace=True      # N'affiche pas les messages de debuggage si False
@@ -272,12 +248,12 @@ def envoi (global_refs,local_refs,comment):
     if EnableTrace:
       print(MyArbo.FieldList)
       print(len(MyArbo.FieldList))
-    if len(MyArbo.FieldList)>0 :               # Si au moins un champ est dÈfini
+    if len(MyArbo.FieldList)>0 :               # Si au moins un champ est d√©fini
       #(local_refs['UpdateCurField'])()
       #  UpdateField(MyArbo.FieldList[MyArbo.CurField][FIELD_NAME],MySession,BufferInput)
       #  ClearBufferInput()
       #
-      # ==> Sauvegarde le contenu de BufferInput dans la variable dÈfinie pour le champ en cours de saisie, puis supprime le contenu du buffer de saisie
+      # ==> Sauvegarde le contenu de BufferInput dans la variable d√©finie pour le champ en cours de saisie, puis supprime le contenu du buffer de saisie
       #     
       #
       if EnableTrace:
@@ -314,7 +290,7 @@ def envoi (global_refs,local_refs,comment):
             if (MyItem<=len(MyArbo.CurrentList)):
               if EnableTrace:
                 print("Item Selected '" + local_refs['MyArbo'].CurrentList[MyItem-1][0] + "' in " + local_refs['MyArbo'].DisplayList[0])
-              #print("MyArbo.ArboCur aprËs bar()" + MyArbo.ArboCur)
+              #print("MyArbo.ArboCur apr√®s bar()" + MyArbo.ArboCur)
               MyArbo.StackList.append(MyArbo.ArboCur)
               MyArbo.SetArbo(MyArbo.CurrentList[MyItem-1][1])
               MyArbo.DoSendPage=True
@@ -344,11 +320,11 @@ def envoi (global_refs,local_refs,comment):
             except ValueError:
               pass
       elif  len (MyArbo.MenuList) >0:          # Si au moins 1 item existe dans la liste Menu:
-        # Aucune liste n'est affichÈe - Essayer avec MenuList 
+        # Aucune liste n'est affich√©e - Essayer avec MenuList 
         MyItem=CheckKeyword()
         if EnableTrace:
           print("TestAvecMenuList (liste de menu pas affichee)")
-        if MyItem>-1:        # Pas de mot clÈ trouvÈ
+        if MyItem>-1:        # Pas de mot cl√© trouv√©
           if (MyItem>0) :    # On a saisi une valeur
             if (MyItem<=len(MyArbo.MenuList)):
               if EnableTrace:
