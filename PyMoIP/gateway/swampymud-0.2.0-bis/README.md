@@ -1,9 +1,9 @@
 Was based uppon SwampyMud - but it's not SwampyMud any more ....
 
 Listen for telnet on port 9000 and for WS on port 9001
-Call to port 8765 in WS
+Call to localhost port 8765 in WS
 
-[Too many logs ... and all MUD functionalities to be removed]
+[Too many verbose traces & logs ... and all MUD functionalities to be removed]
 
 # SwampyMud
 
