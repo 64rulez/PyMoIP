@@ -1,5 +1,5 @@
 As of 23/05/2021 :
-
+[Short]
 The server (server.py) will listen on port 8765 and will accept any (as mush as can be handled by your system) WS connection from any @IP of your system.
 
 The server will 'boot' from 'arbo/arbo_start.py' and needs 'arbo/arbo_defaultvars.py'. It'll provide Videotext pages as descriped in this 'arbo' file and all related ones.
@@ -15,3 +15,130 @@ Work still on progress :
 - Review some variables operation
 - Review/complete ListSession[] variable
 - 'Smart' communication with the gateway
+
+[Long]
+
+The 'ARBO' structure.
+=====================
+It provides a way to completely setup a PyMoIPserver instance by importing and interpreting a set of Python variables. 
+(Notice that, as we're working with Python3 interpretable files, changes occuring to 'arbo' files are only taken into account when the instance is restarted)
+
+Each PyMoIPserver instance starts with some preset values what are :
+- The port to listen to (by default, 8765)
+- A folder defining the starting of the 'ARBO' structure (by default, ./arbo). This folder contains at least the two following files :
+    - The file arbo_defaultvar.py
+    - The starting arbo_node (by default, arbo_start.py)
+    
+Those arbo files are imported at runtime as normal Python3 files, their structure must conform with Python3 requirements. There might be comments or whatever ...
+As a good practice, those files should start with a comment stating the name of the file, it's location and purpose
+
+When arriving to an arbo_node, arbo_variables are firstly imported from the file './arbo/arbo_defaultvar.py', what must contain a default definition for each recognized arbo_variable.
+    List of recognized arbo_variables : (26/05/2021)
+    [page_sequence related arbo_variables]
+    - PageDir ..... String type, defines the location of videotext page_sequence such as "/home/pi/python/PyMoIP/TestPages/"
+    - FirstFile ... Integer type, defines the page file number of the first videotext page of the page_sequence such as 1
+    - LastFile .... Integer type, defines the page file number of the last videotext page of the page_sequence such as 1
+    - PrefixFile .. String type, defines the prefix of page files of the page_sequence such as "TestPage"
+    - PostfixFile . String type, defines the postfix of page files of the page_sequence such as ".vdt"
+    [link related arbo_variables]
+    - GuideLink ... String type, defines the arbo_node to reach when pressing 'HELP' key at this arbo_node
+    - TimeoutLink . String type, defines the arbo_node to reach when a timeout event occurs at this arbo_node
+    - TimerLink ... String type, defines the arbo_node to reach when a timer event occurs at this arbo_node
+    [time related arbo_variables]
+    - TimeoutLimit  Integer type, defines the time in seconds before the Timeout event is raised at this arbo_node
+    - TimerDelay .. Integer type, defines the time in seconds before the Timer event is raised at this arbo_node
+    [module related arbo_variables]
+    - Module ...... String type, defines the module to be executed at this arbo_node (or "<None>")
+    [list related arbo_variables]
+    - VarList ..... List type, defines the list of Variables to be displayed after the videotext page file is displayed
+    - FieldList ... List type, defines the list of Fields to be displayed after the videotext page file is displayed
+    - BypassList .. List type, defines the list of Bypass to be tested on arrival to this arbo_node
+    - DisplayList . List type, defines the list to be displayed after the videotext page file is displayed
+    - MenuList .... List type, defines the list of menu items links of the menu, to be displayed or not, after the videotext page file is displayed
+    - KeywordList . List type, defines the list of keyword links, not to be displayed
+    
+Once the default file './arbo/arbo_defaultvar.py' have been imported, the real arbo_node file (such as ./arbo/arbo_start.py) is imported in the exact same way as the default file.
+Notice that :
+- This file must not necessarily contain a definition for each recognized arbo_variable as they've just been initilized by default values
+- If this file is missing this arbo_node won't be reachable and the user will be redirected to the previous arbo_node
+
+The 'PAGE_SEQUENCE' structure.
+==============================
+An arbo_node defines a page_sequence (allowing several videotext pages to be displayed at one single arbo_node).
+- All videotext page files of a page_sequence must reside in the same PageDir
+- The PageDir must end with a tailing /, it may be relative to PyMoIPserver or absolute from root
+- All videotext page files of a page_sequence must start with the same PrefixFile
+- All videotext page files of a page_sequence must end with the same PostfixFile
+
+Ex : page files ./bla_1_blu.vdt, ./bla_2_blu.vdt, <...> ./bla_18_blu.vdt might constitute a page_sequence of 18 pages, with a "bla_" PrefixFile and "_blu.vdt" PostfixFile.
+On arrival to this arbo_node, the first page will be displayed (here, ./bla_1_blu.vdt).
+- 'NEXT' key will display the next page of the sequence (here, ./bla_2_blu.vdt ... if the last page was displayed, next page is first page)
+- 'PREV' key will display the previous page of the sequence (here, ./bla_18_blu.vdt)
+- FirstFile must be a positive integer not null (ie : not necessary 1)
+- LastFile must be a positive integer not null (ie : not necessary 1)
+- If a page file is missing, an error is displayed on zero line
+
+The 'LINKS' structure.
+======================
+When certain events occurs, if the matching link is defined, the user will be redirected to the arbo_node defined by the link.
+    (If the link is not defined, should be an empty scring)
+    
+'HELP' key : Takes a backup of current arbo_node in the index_stack then redirects the user to this arbo_node link.
+             (Next press of 'INDEX' key will redirect the user to current arbo_node)
+'Time' events : No backup to index_stack is taken, the user is directly redirected to this arbo_node link when the event raises.
+
+The 'TIME' structure.
+=====================
+'Timeout' event : Is raised after TimeoutLimit seconds since the page was displayed or last received key
+'Timer' event   : Is raised after TimerDelay seconds since the page was displayed
+
+The 'MODULE' structure.
+=======================
+[TBC]
+All 'real' PyMoIPserver activity is done in modules that are Python3 executables imported at runtime. They're located in the same folder as PyMoIPserver.
+
+A module consist of one entry point per server event :
+- __INIT__ (Arrival on arbo_node)
+- Timeout
+- Timer
+- Key XXX
+- LIB
+
+Current available modules are :
+- module_menu.py
+- module_teletel.py
+
+The 'LIST' related structures.
+==============================
+[TBC]
+VarList ..... List type, defines the list of Variables to be displayed after the videotext page file is displayed
+
+Ex : VarList=[] : Empty list - Means no variable to be displayed
+
+     VarList=[[3,4,['A','H'],"%GotRom",3,'.'],[4,4,['B'],"%GotRam1",16,'#']]
+     
+                  This list represents the display of two variables, "%GotRom" and "%GotRam1". For each variable to be displayed, details are as of :
+                        [<VerticalPosition>,<HorizontalPosition>,[<AttributeList>],<VariableName>,<VariableSize>,<FillCharacter>]
+                        
+                  where :
+                    <VerticalPosition> is the line where the variable has to be displayed [0 to 24]
+                    <HorizontalPosition> is the column where the variable has to be displayed [1 to 40]
+                    <AttributeList> (none to several items) is the list of attributes to display the variable
+                      If <AttributeList>=[], then no attribute is defined before character (meaning white/normal)
+                    <VariableName> is the name of the internal variable to be displayed (prefixed)
+                      Prefix % =
+                      Prefix * =
+                      Prefix # =
+                      Prefix (none) =
+                    <VariableSize> is the size of the variable to be displayed (number of fill characters to print)
+                      If <VariableSize>=0, then no fill character is printed
+                    <FillCharacter> is the fill character to print before printing the variable
+                    
+    - FieldList ... List type, defines the list of Fields to be displayed after the videotext page file is displayed
+    - BypassList .. List type, defines the list of Bypass to be tested on arrival to this arbo_node
+    - DisplayList . List type, defines the list to be displayed after the videotext page file is displayed
+    - MenuList .... List type, defines the list of menu items links of the menu, to be displayed or not, after the videotext page file is displayed
+    - KeywordList . List type, defines the list of keyword links, not to be displayed
+
+
+
