@@ -125,11 +125,28 @@ Ex : VarList=[] : Empty list - Means no variable to be displayed
                     <HorizontalPosition> is the column where the variable has to be displayed [1 to 40]
                     <AttributeList> (none to several items) is the list of attributes to display the variable
                       If <AttributeList>=[], then no attribute is defined before character (meaning white/normal)
-                    <VariableName> is the name of the internal variable to be displayed (prefixed)
-                      Prefix % =
-                      Prefix * =
-                      Prefix # =
-                      Prefix (none) =
+                    <VariableName> is the name of the internal variable (internal to PyMoIPserver.py) to be displayed (optionally prefixed/postfixed)
+                      If undefined, a variable will be evaluated as Udef<Prefix>:<VariableName>
+                      Prefixes :
+                        Defines the origin of the variable
+                          Prefix % = Specify a variable defined in Arbo class (ie Local variable)
+                          Prefix * = Specify a global variable (directly accessible from 'PyMoIPserver.py')
+                            Ex : *Blabla references the Blabla variable as defined in PyMoIPserver.py
+                          Prefix # =
+                          Prefix (none) =  Specify a global variable (directly accessible from 'PyMoIPserver.py') prefixed by 'refs_prefix' and postfixed by 'MySession'
+                            Ex : Blabla references the _PyMoIP_Blabla_<MySession> variable as defined in PyMoIPserver.py
+                            ==> Those variables are similar to 'local' variables (ie : 1 per session) but might be reached from any session
+                            
+                      PostFixes :
+                        Specific to list type variables, for 'Bla' variable in one of the forms
+                            Bla:Field#
+                                Return field# of the list
+                            Bla:Field#:Subfield#
+                                Return Subfield# in Field# of the list
+                            Bla:*:Field#
+                                Return Field# from the list where field#1==MySession
+                                (Usefull to get any information as 'MyPseudo' or 'MyIP', etc from ListSession global variable)
+                        
                     <VariableSize> is the size of the variable to be displayed (number of fill characters to print)
                       If <VariableSize>=0, then no fill character is printed
                     <FillCharacter> is the fill character to print before printing the variable
