@@ -50,6 +50,7 @@ When arriving to an arbo_node, arbo_variables are firstly imported from the file
     [module related arbo_variables]
     - Module ...... String type, defines the module to be executed at this arbo_node (or "<None>")
     [list related arbo_variables]
+    - ConstList ... List type, defines the list of Constants to be displayed after the videotext page file is displayed
     - VarList ..... List type, defines the list of Variables to be displayed after the videotext page file is displayed
     - FieldList ... List type, defines the list of Fields to be displayed after the videotext page file is displayed
     - BypassList .. List type, defines the list of Bypass to be tested on arrival to this arbo_node
@@ -111,6 +112,10 @@ Current available modules are :
 The 'LIST' related structures.
 ==============================
 [TBC]
+ConstList ... List type, defines the list of Constants to be displayed after the videotext page file is displayed
+    Works in the same way as VarList for cosmetics of displaying but does not relates to Python variables, this is meant for 'hardcoded' videotext data to be added to the displayed page
+    (See module_teletel.py for an exemple)
+    
 VarList ..... List type, defines the list of Variables to be displayed after the videotext page file is displayed
 
 Ex : VarList=[] : Empty list - Means no variable to be displayed
