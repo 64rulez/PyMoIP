@@ -115,7 +115,8 @@ The 'LIST' related structures.
 
 ConstList ... List type, defines the list of Constants to be displayed after the videotext page file is displayed
     Works in the same way as VarList for cosmetics of displaying but does not relates to Python variables, this is meant for 'hardcoded' videotext data to be added to the displayed page
-    (See module_teletel.py for an exemple)
+    (See module_teletel.py for an exemple) NE MARCHE PAS l'import dans SetArbo() retrouve la variable modifiée même avec une nouvelle session ?????
+                                           --------------------------------------------------------------------------------------------------------
     
 VarList ..... List type, defines the list of Variables to be displayed after the videotext page file is displayed
 
