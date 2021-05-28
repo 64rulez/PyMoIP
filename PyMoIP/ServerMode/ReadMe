@@ -158,6 +158,26 @@ Ex : VarList=[] : Empty list - Means no variable to be displayed
                     
     - FieldList ... List type, defines the list of Fields to be displayed after the videotext page file is displayed
     - BypassList .. List type, defines the list of Bypass to be tested on arrival to this arbo_node
+
+BypassList .. List type, defines the list of Bypass to be tested on arrival to this arbo_node
+    [Warn] A missing arbo_node file will lead to an infinite loop if the 'proper' conditions are met.
+        - At start arbo_node:
+            - A Bypass is setup as "if GotRom starts with 'P' or with 'Cp' then go to 'photovideotext' node.
+            - A HELP key link is defined to an 'help' node.
+            - None of the above arbo_node files are present
+        - It works because GotRom variable is not updated when arriving at start arbo_node (it's beeing received) ==> Bypass condition not met
+        - It fails if HELP key is pressed on the start arbo_node because :
+            - Current (start node) arbo_node is pushed to the index_stack
+            - New arbo_node (help node) is selected.
+                - While evaluating the new arbo_node, it fails because this node does not exist.
+            - As it's failling, it pops previous arbo_node (start node) from the index_stack (*)
+                - While evaluating the new arbo_node (start node), GotRom have been received/updated.
+                - The condition is met, so, we push again current (start node) arbo_node to the index_stack
+                - New arbo_node (photovideotext node) is selected.
+                - While evaluating the new arbo_node, it fails because this node does not exist. As it fails because this node does not exist, it loops to (*).
+                ==> No solution yet to break the loop except to restart PyMoIPserver as even a new received key won't be analyzed until a proper node is selected
+                ==> may be a loop counter that would break the loop ?
+
     - DisplayList . List type, defines the list to be displayed after the videotext page file is displayed
     - MenuList .... List type, defines the list of menu items links of the menu, to be displayed or not, after the videotext page file is displayed
     - KeywordList . List type, defines the list of keyword links, not to be displayed
