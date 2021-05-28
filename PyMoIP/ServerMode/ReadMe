@@ -153,8 +153,9 @@ Ex : VarList=[] : Empty list - Means no variable to be displayed
                                 (Usefull to get any information as 'MyPseudo' or 'MyIP', etc from ListSession global variable)
                         
                     <VariableSize> is the size of the variable to be displayed (number of fill characters to print)
-                      If <VariableSize>=0, then no fill character is printed
+                      If <VariableSize>=0 (or if <FillCharacter>=""), then no fill character is printed
                     <FillCharacter> is the fill character to print before printing the variable
+                      If <FillCharacter>="" (or if <VariableSize>=0), then no fill character is printed
                     
     - FieldList ... List type, defines the list of Fields to be displayed after the videotext page file is displayed
     - BypassList .. List type, defines the list of Bypass to be tested on arrival to this arbo_node
