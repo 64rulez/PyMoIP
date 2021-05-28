@@ -5,7 +5,7 @@ The server (server.py) will listen on port 8765 and will accept any (as mush as 
 The server will 'boot' from 'arbo/arbo_start.py' and needs 'arbo/arbo_defaultvars.py'. It'll provide Videotext pages as descriped in this 'arbo' file and all related ones.
 The server comes with a single module 'module_menu.py' that should be located in the same folder.
 
-No documentation is yet provided.
+No documentation is yet provided [WIP].
 ==> You need to understand how provided 'arbo files' are organized to create your own server for the moment.
 ==> You need to understand how provided 'module file' is organized to create your own modules for the moment.
 
@@ -112,6 +112,7 @@ Current available modules are :
 The 'LIST' related structures.
 ==============================
 [TBC]
+
 ConstList ... List type, defines the list of Constants to be displayed after the videotext page file is displayed
     Works in the same way as VarList for cosmetics of displaying but does not relates to Python variables, this is meant for 'hardcoded' videotext data to be added to the displayed page
     (See module_teletel.py for an exemple)
@@ -142,8 +143,8 @@ Ex : VarList=[] : Empty list - Means no variable to be displayed
                             Ex : Blabla references the _PyMoIP_Blabla_<MySession> variable as defined in PyMoIPserver.py
                             ==> Those variables are similar to 'local' variables (ie : 1 per session) but might be reached from any session
                             
-                      PostFixes :
-                        Specific to list type variables, for 'Bla' variable in one of the forms
+                      PostFixes (applies only to python list type variables) :
+                        Specific to list type variables, for 'Bla' variable in one of the forms (fields are numbered from 1, not 0)
                             Bla:Field#
                                 Return field# of the list
                             Bla:Field#:Subfield#
@@ -182,6 +183,26 @@ BypassList .. List type, defines the list of Bypass to be tested on arrival to t
     - DisplayList . List type, defines the list to be displayed after the videotext page file is displayed
     - MenuList .... List type, defines the list of menu items links of the menu, to be displayed or not, after the videotext page file is displayed
     - KeywordList . List type, defines the list of keyword links, not to be displayed
+
+
+
+Notes about videotext display page (UpdateDisplay() behaviour) :
+----------------------------------------------------------------
+A videotext page consist of several elements that may be refreshed or not, depending on the context
+- DoSendPage=True ==> Full page needs to be refreshed
+    - PreBytes (InsertBytes - evaluated previously elsewhere, usually for line 0 messages, cleared once displayed)
+    - Videotext page file contents
+    - PostBytes
+        - DisplayList[] (the list items to be evaluated and displayed)
+        - ConstList[] (the hardcoded items to be displayed)
+        - VarList[] (the variable items to be evaluated and displayed)
+    - PostFields
+        - All fields of FieldList[] but CurField (the field items to be evaluated and displayed, but not focussed)
+        - CurField (the field item to be displayed, currently with edit focus)
+
+- RefreshCurField=True ==> Only current field needs to be refreshed. Optionaly, may refresh previous field before refreshing current field - (not so usefull)
+    - PreBytes (InsertBytes - evaluated previously elsewhere, usually for line 0 messages, cleared once displayed)
+    - CurField (the field item to be displayed, currently with edit focus)
 
 
 
