@@ -1,1 +1,18 @@
+PyMoIP gateway
+==============
 
+Purpose :
+
+  Basic
+  -----
+This program will accept connections from multiple remote users (clients) what are using WebSocket and/or Telnet protocol. Those client might be :
+- A WS client (MiEdit) running from your browser (see www.teletel.org)
+- A telnet client (iTimtel or any legacy emulator) running from your Windows PC
+- A serial to WS bridge (PyMoIP user)
+
+Once a user session is accepted, communication is routed to the default server with the proper parameters, as defined from the command line.
+
+  Advanced
+  --------
+  
+If the default videotext server is PyMoIP server running 'module_teletel.py', then the gateway is able to communicate smartly with the module
