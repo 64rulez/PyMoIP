@@ -1,18 +1,58 @@
 PyMoIP gateway
 ==============
 
-Purpose :
+Usage :
+-------
+pi@raspberrypi:~/python/PyMoIP $ python3 -m Gateway --tcp 9000 --ws 9001
+2021-06-05 01:21:41,519 [INFO] Launching a WebSocket Server on port '9001' and a TCP Server on port '9000'
+Target server 'ws://localhost:8765' ping_interval=None subprotocols=[]
+GatewayServer.py->_ws_connect_to_server_bis() trying connection to ws://localhost:8764.
+2021-06-05 01:21:41,540 [ERROR] Gateway --Trying---- to connect to WS [ws://localhost:8764]
+GatewayLink openned
 
+
+Purpose :
+---------
   Basic
   -----
 This program will accept connections from multiple remote users (clients) what are using WebSocket and/or Telnet protocol. Those client might be :
 - A WS client (MiEdit) running from your browser (see www.teletel.org)
-- A telnet client (iTimtel or any legacy emulator) running from your Windows PC
-- A serial to WS bridge (PyMoIP user)
+- A telnet client (iTimtel or any legacy emulator using telnet) running from your PC
+- A serial to WS bridge (PyMoIP user) allowing the usage of a real Minitel
 
-Once a user session is accepted, communication is routed to the default server with the proper parameters, as defined from the command line.
+Once a user session is accepted, communication from the client is routed to the default server with the proper parameters, as defined from the command line.
+[Nb1 : Currently, only WS servers are reachable - it's planned to also reach telnet servers in the future]
+[Nb2 : A 'server.log' file is maintained. Some cleanups to be done]
 
   Advanced
   --------
-  
-If the default videotext server is PyMoIP server running 'module_teletel.py', then the gateway is able to communicate smartly with the module
+When the default videotext server is a PyMoIP_server running 'module_teletel.py', then the gateway is able to communicate smartly with the module. This adds :
+- Allows PyMoIP_server to redirect communication of the client to another videotext server
+- Allows PyMoIP_server to regain communication with the client once it is disconnected from the other videotext server - monitor Connexion/Fin key
+- Allows PyMoIP_server to display the virtual cost of the communication
+- Allows PyMoIP_server to know the real @IP of the client
+
+Manages timeouts for user inactivity and maximal session duration.
+
+Deep view of PyMoIP gateway<=>server operation
+----------------------------------------------
+1) Communication  : 
+    - PyMoIP_gateway connects to PyMoIP_server on it's command port
+    - When/if it fails, retries every 5 seconds
+    - Any user arriving or leaving is advertised to PyMoIP_server on command port
+2) Identification : 
+    - PyMoIP_server sends ENQ-ROM to the client
+    - PyMoIP_gateway intercepts the first ENQ-ROM
+        - It replies 01/7f/7f/7f/04 to the server, followed by user session details (including user's real @IP)
+        - It also forwards ENQ-ROM to the client
+    - PyMoIP_server recognize the sequence 01/7f/7f/7f/04 as introducer of user session details
+3) Redirection :
+    - PyMoIP_server sends a 'CONNECT' command to PyMoIP_gateway with all necessary details on command channel
+    - PyMoIP_gateway informs PyMoIP_server of the ongoing of the redirection (CONNECTING/CONNECTED/DISCONNECTED) on command channel
+    - PyMoIP_gateway starts a new session to the redirected server
+      - Enables communication from user to the redirected server and back
+      - Continues communication from PyMoIP_server to user (allow display of virtual cost)
+      - Block communication from user to PyMoIP_server 
+      - Monitor Connexion/Fin key usage to force disconnection from the redirected server
+
+Known bug (with MiEdit emulation) : User is fully disconnected if Connexion/Fin key is the first key pressed immediately after a redirection
