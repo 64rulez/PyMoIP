@@ -28,24 +28,24 @@ Once a user session is accepted, communication from the client is routed to the 
   --------
 When the default videotext server is a PyMoIP_server running 'module_teletel.py', then the gateway is able to communicate smartly with the module. This adds :
 - Allows PyMoIP_server to redirect communication of the client to another videotext server
-- Allows PyMoIP_server to regain communication with the client once it is disconnected from the other videotext server - monitor Connexion/Fin key
+- Allows PyMoIP_server to regain communication with the client once it is disconnected from the other (redirected) videotext server - monitoring Connexion/Fin key
 - Allows PyMoIP_server to display the virtual cost of the communication
 - Allows PyMoIP_server to know the real @IP of the client
 
 Manages timeouts for user inactivity and maximal session duration.
 
-Deep view of PyMoIP gateway<=>server operation
-----------------------------------------------
+Deep view of PyMoIP_gateway<=>PyMoIP_server operation
+-----------------------------------------------------
 1) Communication  : 
     - PyMoIP_gateway connects to PyMoIP_server on it's command port
     - When/if it fails, retries every 5 seconds
     - Any user arriving or leaving is advertised to PyMoIP_server on command port
 2) Identification : 
-    - PyMoIP_server sends ENQ-ROM to the client
+    - PyMoIP_server sends ENQ-ROM to the client (to identify normal Minitel hardware)
     - PyMoIP_gateway intercepts the first ENQ-ROM
         - It replies 01/7f/7f/7f/04 to the server, followed by user session details (including user's real @IP)
-        - It also forwards ENQ-ROM to the client
-    - PyMoIP_server recognize the sequence 01/7f/7f/7f/04 as introducer of user session details
+        - It also forwards ENQ-ROM to the client to insure proper Minitel hardware identification
+    - PyMoIP_server recognize the sequence 01/7f/7f/7f/04 as an introducer of user session details - it'll also accept Minitel hardware identification following normally
 3) Redirection :
     - PyMoIP_server sends a 'CONNECT' command to PyMoIP_gateway with all necessary details on command channel
     - PyMoIP_gateway informs PyMoIP_server of the ongoing of the redirection (CONNECTING/CONNECTED/DISCONNECTED) on command channel
@@ -55,4 +55,6 @@ Deep view of PyMoIP gateway<=>server operation
       - Block communication from user to PyMoIP_server 
       - Monitor Connexion/Fin key usage to force disconnection from the redirected server
 
-Known bug (with MiEdit emulation) : User is fully disconnected if Connexion/Fin key is the first key pressed immediately after a redirection
+Known bug (with/due to MiEdit emulation) : User is fully disconnected if Connexion/Fin key is the first key pressed immediately after a redirection due to wrong interpretation in the gateway code
+
+Credits : Code initially inspired by SWAMPYMUD joined there
