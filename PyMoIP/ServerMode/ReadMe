@@ -1,29 +1,44 @@
-As of 23/05/2021 :
+Main works from 03/2021 to 06/2021 :
+
 [Short]
-The server (server.py) will listen on port 8765 and will accept any (as mush as can be handled by your system) WS connection from any @IP of your system.
+The server code (server.py) will listen (by default) on port 8765 and will accept any (as much as can be handled by your system) WS connection from any @IP of your system.
 
-The server will 'boot' from 'arbo/arbo_start.py' and needs 'arbo/arbo_defaultvars.py'. It'll provide Videotext pages as descriped in this 'arbo' file and all related ones.
-The server comes with a single module 'module_menu.py' that should be located in the same folder.
+The server will 'boot', by default, from 'arbo/arbo_start.py' file and needs in all cases 'arbo/arbo_defaultvars.py' file. It'll deliver Videotext pages as descriped in this 'arbo' file and all related ones.
 
-No documentation is yet provided [WIP].
+The server comes with some modules that should be located in the same folder as main server code.
+- A dedicated teletel "yellow pages" and redirection module 'module_teletel.py'
+    - Download centralized "yellow pages" referencial from www.teletel.org
+    - Allow the user to enter the shortcut of a Videotext server - accept an extended data field (WIP)
+    - Allow the user to request the display of current (virtual !) communication costs with 'Index' key
+    - Communicates with the gateway to redirect the user to the proper Videotext server using proper parameters the time of his session to this server
+    - [TBD] display full MGS index with 'Help' key - Examine www.teletel.org/minitel-yp.json for details
+- A single general purpose module 'module_menu.py'
+    - Navigate across the hierarchical structure described by arbo files
+        - Follows links ('Help', 'Index', 'Keywords', menu choices, etc)
+    - Display raw Videotext pages (including 8 bits JPEG photo as prepared by HaMinitel)
+    - Display real time variables
+- You may create dedicated modules as you need
+
+No proper documentation is yet provided [WIP].
 ==> You need to understand how provided 'arbo files' are organized to create your own server for the moment.
 ==> You need to understand how provided 'module file' is organized to create your own modules for the moment.
 
 Work still on progress :
-- Timeout, Timer, and disconnection codes
+- Timeout, Timer, and disconnection codes (mostly working)
 - Some proper logging features, less verbose debug messages
-- Review some variables operation
-- Review/complete ListSession[] variable
-- 'Smart' communication with the gateway
+- Review/complete ListSession[] variable usage
+[New 07/06/2021]
+- 'Smart' communication with the gateway (server is listenning on port 8764) for redirection purpose
+- Introduction of module 'module_teletel.py'
 
 [Long]
 
 The 'ARBO' structure.
 =====================
-It provides a way to completely setup a PyMoIPserver instance by importing and interpreting a set of Python variables. 
+It provides a way to completely setup a PyMoIP_server instance by importing and interpreting a set of Python variables. 
 (Notice that, as we're working with Python3 interpretable files, changes occuring to 'arbo' files are only taken into account when the instance is restarted)
 
-Each PyMoIPserver instance starts with some preset values what are :
+Each PyMoIP_server instance starts with some preset values what are :
 - The port to listen to (by default, 8765)
 - A folder defining the starting of the 'ARBO' structure (by default, ./arbo). This folder contains at least the two following files :
     - The file arbo_defaultvar.py
@@ -82,7 +97,7 @@ On arrival to this arbo_node, the first page will be displayed (here, ./bla_1_bl
 The 'LINKS' structure.
 ======================
 When certain events occurs, if the matching link is defined, the user will be redirected to the arbo_node defined by the link.
-    (If the link is not defined, should be an empty scring)
+    (If the link is not defined, should be an empty string)
     
 'HELP' key : Takes a backup of current arbo_node in the index_stack then redirects the user to this arbo_node link.
              (Next press of 'INDEX' key will redirect the user to current arbo_node)
@@ -96,13 +111,13 @@ The 'TIME' structure.
 The 'MODULE' structure.
 =======================
 [TBC]
-All 'real' PyMoIPserver activity is done in modules that are Python3 executables imported at runtime. They're located in the same folder as PyMoIPserver.
+All 'real' PyMoIP_server activity is done in modules that are Python3 executables, imported at runtime. They're located in the same folder as PyMoIP_server.
 
 A module consist of one entry point per server event :
 - __INIT__ (Arrival on arbo_node)
 - Timeout
 - Timer
-- Key XXX
+- 'Key XXX'
 - LIB
 
 Current available modules are :
@@ -111,13 +126,13 @@ Current available modules are :
 
 The 'LIST' related structures.
 ==============================
-[TBC]
+[Mostly TBC]
 
 ConstList ... List type, defines the list of Constants to be displayed after the videotext page file is displayed
     Works in the same way as VarList for cosmetics of displaying but does not relates to Python variables, this is meant for 'hardcoded' videotext data to be added to the displayed page
-    (See module_teletel.py for an exemple) NE MARCHE PAS l'import dans SetArbo() retrouve la variable modifiée même avec une nouvelle session ?????
-                                           --------------------------------------------------------------------------------------------------------
-    
+    (See module_teletel.py for an exemple of dynamic usage with extended data field) 
+
+
 VarList ..... List type, defines the list of Variables to be displayed after the videotext page file is displayed
 
 Ex : VarList=[] : Empty list - Means no variable to be displayed
@@ -160,15 +175,18 @@ Ex : VarList=[] : Empty list - Means no variable to be displayed
                       If <FillCharacter>="" (or if <VariableSize>=0), then no fill character is printed
                     
     - FieldList ... List type, defines the list of Fields to be displayed after the videotext page file is displayed
-    - BypassList .. List type, defines the list of Bypass to be tested on arrival to this arbo_node
+[TBC]
 
+    - BypassList .. List type, defines the list of Bypass to be tested on arrival to this arbo_node
+[TBC]
 BypassList .. List type, defines the list of Bypass to be tested on arrival to this arbo_node
     [Warn] A missing arbo_node file will lead to an infinite loop if the 'proper' conditions are met.
+           ------------------------------------------------------------------------------------------
         - At start arbo_node:
-            - A Bypass is setup as "if GotRom starts with 'P' or with 'Cp' then go to 'photovideotext' node.
+            - A Bypass is setup as "if GotRom starts with 'P' or starts with 'Cp' then go to 'photovideotext' node.
             - A HELP key link is defined to an 'help' node.
             - None of the above arbo_node files are present
-        - It works because GotRom variable is not updated when arriving at start arbo_node (it's beeing received) ==> Bypass condition not met
+        - It works at first arrival on the node because GotRom variable is not yet updated when arriving at start arbo_node (it's beeing received) ==> Bypass condition not met
         - It fails if HELP key is pressed on the start arbo_node because :
             - Current (start node) arbo_node is pushed to the index_stack
             - New arbo_node (help node) is selected.
@@ -182,8 +200,14 @@ BypassList .. List type, defines the list of Bypass to be tested on arrival to t
                 ==> may be a loop counter that would break the loop ?
 
     - DisplayList . List type, defines the list to be displayed after the videotext page file is displayed
+[TBC]
+
     - MenuList .... List type, defines the list of menu items links of the menu, to be displayed or not, after the videotext page file is displayed
-    - KeywordList . List type, defines the list of keyword links, not to be displayed
+[TBC]
+
+    - KeywordList . List type, defines the list of keyword links in menus, not to be displayed
+[TBC]
+
 
 
 
