@@ -70,7 +70,7 @@ Edit 13/08/21 :
 - If a session (from WS or Telnet or Display) is detected to be anormally short (too few seconds between open/close) the IP is banned.
 - A local IP will never be banned
 - Banned IPs are unbanned after a default delay of 10 days and 20 seconds (why not ?) after last visit
-- Banned file list is /tmp/banned.json
+- Banned file list is 'banned.json' and should be located in '/tmp' (current sample attached here for illustration)
 
 "Display Console" : To ease Gateway support, a new console have been added (default port 8999).
 It will show :
