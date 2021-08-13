@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-'''main script for PyMoIP_gateway'''
+'''main script for PyMoIPgateway'''
 import sys
 import logging
 import errno
@@ -15,7 +15,7 @@ import asyncio
 logging.basicConfig(format='%(asctime)s [%(levelname)s] %(message)s',
                     level=logging.INFO,  # ERROR
                     handlers=[
-                        logging.FileHandler("PyMoIP_gateway.log"),
+                        logging.FileHandler("server.log"),
                         logging.StreamHandler(sys.stdout)
                     ])
 
@@ -30,21 +30,16 @@ parser.add_argument("--ws", type=int, metavar="PORT",
 parser.add_argument("--tcp", type=int, metavar="PORT",
                     help="Specify a port for a TCP Server. (Default=9000)"
                     "(If no port is provided, no TCP Server will be created.)")                    
-parser.add_argument("--display", type=int, metavar="PORT",
-                    help="Specify a port for a TCP display Server. (Default=8999)"
-                    "(If no port is provided, no TCP display Server will be created.)")                    
-parser.add_argument("-i", "--ip", type=str, metavar="IP",
-                    help="Specify an IP address to listen to. (Default=0.0.0.0 (all @IPs))")
 parser.add_argument("-c", "--command", metavar="URI",
-                    help="Specify an URI for WS Gatewaylink to 'Télétel' command channel"
+                    help="Specify an URI for WS Gatewayink to 'Télétel'"
                     "(default='ws://localhost:8764' for normal command channel)")
 parser.add_argument("-v", "--videotext", metavar="URI",
                     help="Specify an URI to WS default videotext server (Default=ws://localhost:8765)")
-parser.add_argument("-p", "--interval", metavar="PING",
+parser.add_argument("-i", "--interval", metavar="PING",
                     help="Specify the ping interval to WS default videotext server (Default=None)")
 parser.add_argument("-b", "--subprotocols", metavar="PROTO",
                     help="Specify subprotocols for WS default videotext server (Default=[])")
-parser.add_argument("-n", "--nocommandchannel", metavar="SWITCH",
+parser.add_argument("-n", "--nocommand", metavar="SWITCH",
                     help="Disable command channel")
 
 # TODO: add log level to the parser
@@ -57,10 +52,8 @@ parser.add_argument("-n", "--nocommandchannel", metavar="SWITCH",
 if __name__ == "__main__":
     args = parser.parse_args()
 
-    ws_port          = args.ws
-    tcp_port         = args.tcp
-    display_port     = args.display
-    MyIP             = args.ip
+    ws_port = args.ws
+    tcp_port = args.tcp
     command_server   = args.command
     teletel_server   = args.videotext
     teletel_interval = args.interval
@@ -74,10 +67,10 @@ if __name__ == "__main__":
       teletel_interval = None
     if teletel_subproto is None:
       teletel_subproto="[]"
-    if args.nocommandchannel is True :
+    if args.nocommand is None :
+      pass
+    else:
       command_server = None
-    if MyIP is None:
-      MyIP = "0.0.0.0"
       
     # perform some error handling
     if ws_port is None and tcp_port is None:
@@ -98,37 +91,21 @@ if __name__ == "__main__":
     else:
         logging.info("Launching a WebSocket Server on port '%d'", ws_port)
 
-    if display_port is None:
-      display_port = 8999
-      
-    if display_port is not None:
-      logging.info("Launching a TCP display Server on port '%d'", display_port)
-    else:
-      logging.info("Not Launching a TCP display Server port.")
-
-
     try:
         print("Target server '"+teletel_server+"' ping_interval="+str(teletel_interval)+" subprotocols="+teletel_subproto)
-        server = GatewayServer(MyIP, ws_port, tcp_port, display_port, command_server, teletel_server, teletel_interval , teletel_subproto)
+        server = GatewayServer(ws_port, tcp_port, command_server, teletel_server, teletel_interval , teletel_subproto)
         
     # TODO: these excepts are no longer necessary, since port is bound until server.run() is called
     except PermissionError:
         print(f"Error. Do not have permission to use port '{args.port}'",
               file=sys.stderr)
-        logging.error("Do not have permission to use port ==> Exit().")
         exit(-1)
     except OSError as ex:
-        print("__main__(gateway.py) OSError [1]:")
         if ex.errno == errno.EADDRINUSE:
-            print(f"Error. Port is already in use.",
+            print(f"Error. Port '{args.port}' is already in use.",
                   file=sys.stderr)
-            logging.error("Port is already in use ==> Exit().")
         else:
             print(ex, file=sys.stderr)
-            logging.error(ex)
-        exit(-1)
-    except :
-        logging.error("Unknown error at GatewayServer() launch.")
         exit(-1)
 
     try:
@@ -136,19 +113,7 @@ if __name__ == "__main__":
         asyncio.get_event_loop().run_forever()
     except KeyboardInterrupt:
         logging.info("Keyboard interrupt detected")
-    except OSError as ex:
-        print("__main__(gateway.py) OSError [2]:")
-        if ex.errno == errno.EADDRINUSE:
-            print(f"Error. Port is already in use.",
-                  file=sys.stderr)
-            logging.error("Port is already in use ==> Exit().")
-        else:
-            print(ex, file=sys.stderr)
-            logging.error(ex)
-    except :
-        logging.error("Unknown error after GatewayServer() launch.")
-    finally:
-        logging.info("Shutting down server")
         server.shutdown()
     # Shut down the server gracefully
+    logging.info("Shutting down server")
     logging.info("Server shutdown. Good bye!!")
