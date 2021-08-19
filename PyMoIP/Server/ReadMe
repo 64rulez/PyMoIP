@@ -6,8 +6,10 @@
          See comments at init() defs in module_menu.py. No change is required in previous arbo files.
 - Minor updates (bug fixes) on "Server/__main__.py",  "Server/PyMoIP_server_gateway.py" and "Server/PyMoIP_server_gateway.py"
     - Improve startup behaviour and gateway link stability
-    - Improve logging - more testing done in Timer and Timeout operations
-...
+    - Improve logging
+    - Testing done in Timer and Timeout operations
+
+
 Main works from 03/2021 to 06/2021 :
 
 [Short]
@@ -86,7 +88,7 @@ When arriving to an arbo_node, arbo_variables are firstly imported from the file
 Once the default file './arbo/arbo_defaultvar.py' have been imported, the real arbo_node file (such as ./arbo/arbo_start.py) is imported in the exact same way as the default file.
 Notice that :
 - This file must not necessarily contain a definition for each recognized arbo_variable as they've just been initilized by default values
-- If this file is missing this arbo_node won't be reachable and the user will be redirected to the previous arbo_node
+- If this file is missing this arbo_node won't be reachable and the user will be redirected to the previously stacked arbo_node
 
 The 'PAGE_SEQUENCE' structure.
 ==============================
