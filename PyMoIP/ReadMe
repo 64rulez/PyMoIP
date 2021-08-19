@@ -2,6 +2,19 @@ Update 19/08/21
 
 
 [SERVER]
-    ServerMode folder contains revision of june 2021 and should be updated.
-    Server folder contains revision of august 2021 and should replace any previous version.
-    Installation : Extract .zip file to <homedir>/python/PyMoIP
+    "ServerMode" folder contains revision of june 2021 and should be updated to august 2021 version.
+       "TestPages" folder contains videotext page files that are now included into "server.zip" archive.
+    "Server" folder contains revision of august 2021 and should replace any previous version.
+       Installation : Extract .zip file to <homedir>/python/PyMoIP
+
+[Gateway]
+    "gateway" folder contains revision of june 2021 and should be updated to august 2021 version.
+    "Gateway" folder contains revision of august 2021 and should replace any previous version.
+
+[User]
+    "UserMode" folder contains revision of july 2020. No support as cancelled and mostly rewritten in v2.
+       (Integrates remote videotext server selection)
+    "UserMode-v2" folder contains revision of june 2021.
+       (No remote videotext server selection as it's now handled by [SERVER] and [GATEWAY] codes)
+
+
