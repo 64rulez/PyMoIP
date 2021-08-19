@@ -1,0 +1,7 @@
+Update 19/08/21
+
+
+[SERVER]
+    ServerMode folder contains revision of june 2021 and should be updated.
+    Server folder contains revision of august 2021 and should replace any previous version.
+    Installation : Extract .zip file to <homedir>/python/PyMoIP
