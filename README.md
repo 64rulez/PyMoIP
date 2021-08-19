@@ -2,8 +2,8 @@
 Python "Modem over IP" for Minitel
 
 Updated 08/2021 :
-- Gateway code
-- Server code
+- Gateway code (Current version in PyMoIP/Gateway folder - Previous version (06/2021) in PyMoIP/gateway to be removed)
+- Server code (Current version in PyMoIP/Server folder - Previous version (06/2021) in PyMoIP/ServerMode to be removed)
 
 [Creation 07/2020 reviewed 08/2021] Overview
 
