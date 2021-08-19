@@ -1,1 +1,242 @@
+[Update 19/08/21]
+- Importants updates on "module_menu.py" and "Server/PyMoIP_arbo.py"
+    - Ability to provide args to modules at init phase
+    - No more "Arriving" message in zero line (will be improved in future releases)
+    - Optional args in module_menu.py : DontStackNode, ForceStackNode, NextDontFollowTimerLink
+         See comments at init() defs in module_menu.py. No change is required in previous arbo files.
+- Minor updates (bug fixes) on "Server/__main__.py",  "Server/PyMoIP_server_gateway.py" and "Server/PyMoIP_server_gateway.py"
+    - Improve startup behaviour and gateway link stability
+    - Improve logging - more testing done in Timer and Timeout operations
 ...
+Main works from 03/2021 to 06/2021 :
+
+[Short]
+The server code (server.py) will listen (by default) on port 8765 and will accept any (as much as can be handled by your system) WS connection from any @IP of your system.
+
+The server will 'boot', by default, from 'arbo/arbo_start.py' file and needs in all cases 'arbo/arbo_defaultvars.py' file. It'll deliver Videotext pages as descriped in this 'arbo' file and all related ones.
+
+The server comes with some modules that should be located in the same folder as main server code.
+- A dedicated teletel "yellow pages" and redirection module 'module_teletel.py'
+    - Download centralized "yellow pages" referencial from www.teletel.org
+    - Allow the user to enter the shortcut of a Videotext server - accept an extended data field (WIP)
+    - Allow the user to request the display of current (virtual !) communication costs with 'Index' key
+    - Communicates with the gateway to redirect the user to the proper Videotext server using proper parameters the time of his session to this server
+    - [TBD] display full MGS index with 'Help' key - Examine www.teletel.org/minitel-yp.json for details
+- A single general purpose module 'module_menu.py'
+    - Navigate across the hierarchical structure described by arbo files
+        - Follows links ('Help', 'Index', 'Keywords', menu choices, etc)
+    - Display raw Videotext pages (including 8 bits JPEG photo as prepared by HaMinitel)
+    - Display real time variables
+- You may create dedicated modules as you need
+
+No proper documentation is yet provided [WIP].
+==> You need to understand how provided 'arbo files' are organized to create your own server for the moment.
+==> You need to understand how provided 'module file' is organized to create your own modules for the moment.
+
+Work still on progress :
+- Timeout, Timer, and disconnection codes (mostly working)
+- Some proper logging features, less verbose debug messages
+- Review/complete ListSession[] variable usage
+[New 07/06/2021]
+- 'Smart' communication with the gateway (server is listenning on port 8764) for redirection purpose
+- Introduction of module 'module_teletel.py'
+
+[Long]
+
+The 'ARBO' structure.
+=====================
+It provides a way to completely setup a PyMoIP_server instance by importing and interpreting a set of Python variables. 
+(Notice that, as we're working with Python3 interpretable files, changes occuring to 'arbo' files are only taken into account when the instance is restarted)
+
+Each PyMoIP_server instance starts with some preset values what are :
+- The port to listen to (by default, 8765)
+- A folder defining the starting of the 'ARBO' structure (by default, ./arbo). This folder contains at least the two following files :
+    - The file arbo_defaultvar.py
+    - The starting arbo_node (by default, arbo_start.py)
+    
+Those arbo files are imported at runtime as normal Python3 files, their structure must conform with Python3 requirements. There might be comments or whatever ...
+As a good practice, those files should start with a comment stating the name of the file, it's location and purpose
+
+When arriving to an arbo_node, arbo_variables are firstly imported from the file './arbo/arbo_defaultvar.py', what must contain a default definition for each recognized arbo_variable.
+    List of recognized arbo_variables : (26/05/2021)
+    [page_sequence related arbo_variables]
+    - PageDir ..... String type, defines the location of videotext page_sequence such as "/home/pi/python/PyMoIP/TestPages/"
+    - FirstFile ... Integer type, defines the page file number of the first videotext page of the page_sequence such as 1
+    - LastFile .... Integer type, defines the page file number of the last videotext page of the page_sequence such as 1
+    - PrefixFile .. String type, defines the prefix of page files of the page_sequence such as "TestPage"
+    - PostfixFile . String type, defines the postfix of page files of the page_sequence such as ".vdt"
+    [link related arbo_variables]
+    - GuideLink ... String type, defines the arbo_node to reach when pressing 'HELP' key at this arbo_node
+    - TimeoutLink . String type, defines the arbo_node to reach when a timeout event occurs at this arbo_node
+    - TimerLink ... String type, defines the arbo_node to reach when a timer event occurs at this arbo_node
+    [time related arbo_variables]
+    - TimeoutLimit  Integer type, defines the time in seconds before the Timeout event is raised at this arbo_node
+    - TimerDelay .. Integer type, defines the time in seconds before the Timer event is raised at this arbo_node
+    [module related arbo_variables]
+    - Module ...... String type, defines the module to be executed at this arbo_node (or "<None>")
+    [list related arbo_variables]
+    - ConstList ... List type, defines the list of Constants to be displayed after the videotext page file is displayed
+    - VarList ..... List type, defines the list of Variables to be displayed after the videotext page file is displayed
+    - FieldList ... List type, defines the list of Fields to be displayed after the videotext page file is displayed
+    - BypassList .. List type, defines the list of Bypass to be tested on arrival to this arbo_node
+    - DisplayList . List type, defines the list to be displayed after the videotext page file is displayed
+    - MenuList .... List type, defines the list of menu items links of the menu, to be displayed or not, after the videotext page file is displayed
+    - KeywordList . List type, defines the list of keyword links, not to be displayed
+    
+Once the default file './arbo/arbo_defaultvar.py' have been imported, the real arbo_node file (such as ./arbo/arbo_start.py) is imported in the exact same way as the default file.
+Notice that :
+- This file must not necessarily contain a definition for each recognized arbo_variable as they've just been initilized by default values
+- If this file is missing this arbo_node won't be reachable and the user will be redirected to the previous arbo_node
+
+The 'PAGE_SEQUENCE' structure.
+==============================
+An arbo_node defines a page_sequence (allowing several videotext pages to be displayed at one single arbo_node).
+- All videotext page files of a page_sequence must reside in the same PageDir
+- The PageDir must end with a tailing /, it may be relative to PyMoIPserver or absolute from root
+- All videotext page files of a page_sequence must start with the same PrefixFile
+- All videotext page files of a page_sequence must end with the same PostfixFile
+
+Ex : page files ./bla_1_blu.vdt, ./bla_2_blu.vdt, <...> ./bla_18_blu.vdt might constitute a page_sequence of 18 pages, with a "bla_" PrefixFile and "_blu.vdt" PostfixFile.
+On arrival to this arbo_node, the first page will be displayed (here, ./bla_1_blu.vdt).
+- 'NEXT' key will display the next page of the sequence (here, ./bla_2_blu.vdt ... if the last page was displayed, next page is first page)
+- 'PREV' key will display the previous page of the sequence (here, ./bla_18_blu.vdt)
+- FirstFile must be a positive integer not null (ie : not necessary 1)
+- LastFile must be a positive integer not null (ie : not necessary 1)
+- If a page file is missing, an error is displayed on zero line
+
+The 'LINKS' structure.
+======================
+When certain events occurs, if the matching link is defined, the user will be redirected to the arbo_node defined by the link.
+    (If the link is not defined, should be an empty string)
+    
+'HELP' key : Takes a backup of current arbo_node in the index_stack then redirects the user to this arbo_node link.
+             (Next press of 'INDEX' key will redirect the user to current arbo_node)
+'Time' events : No backup to index_stack is taken, the user is directly redirected to this arbo_node link when the event raises.
+
+The 'TIME' structure.
+=====================
+'Timeout' event : Is raised after TimeoutLimit seconds since the page was displayed or last received key
+'Timer' event   : Is raised after TimerDelay seconds since the page was displayed
+
+The 'MODULE' structure.
+=======================
+[TBC]
+All 'real' PyMoIP_server activity is done in modules that are Python3 executables, imported at runtime. They're located in the same folder as PyMoIP_server.
+
+A module consist of one entry point per server event :
+- __INIT__ (Arrival on arbo_node)
+- Timeout
+- Timer
+- 'Key XXX'
+- LIB
+
+Current available modules are :
+- module_menu.py
+- module_teletel.py
+
+The 'LIST' related structures.
+==============================
+[Mostly TBC]
+
+ConstList ... List type, defines the list of Constants to be displayed after the videotext page file is displayed
+    Works in the same way as VarList for cosmetics of displaying but does not relates to Python variables, this is meant for 'hardcoded' videotext data to be added to the displayed page
+    (See module_teletel.py for an exemple of dynamic usage with extended data field) 
+
+
+VarList ..... List type, defines the list of Variables to be displayed after the videotext page file is displayed
+
+Ex : VarList=[] : Empty list - Means no variable to be displayed
+
+     VarList=[[3,4,['A','H'],"%GotRom",3,'.'],[4,4,['B'],"%GotRam1",16,'#']]
+     
+                  This list represents the display of two variables, "%GotRom" and "%GotRam1". For each variable to be displayed, details are as of :
+                        [<VerticalPosition>,<HorizontalPosition>,[<AttributeList>],<VariableName>,<VariableSize>,<FillCharacter>]
+                        
+                  where :
+                    <VerticalPosition> is the line where the variable has to be displayed [0 to 24]
+                    <HorizontalPosition> is the column where the variable has to be displayed [1 to 40]
+                    <AttributeList> (none to several items) is the list of attributes to display the variable
+                      If <AttributeList>=[], then no attribute is defined before character (meaning white/normal)
+                    <VariableName> is the name of the internal variable (internal to PyMoIPserver.py) to be displayed (optionally prefixed/postfixed)
+                      If undefined, a variable will be evaluated as Udef<Prefix>:<VariableName>
+                      Prefixes :
+                        Defines the origin of the variable
+                          Prefix % = Specify a variable defined in Arbo class (ie Local variable)
+                          Prefix * = Specify a global variable (directly accessible from 'PyMoIPserver.py')
+                            Ex : *Blabla references the Blabla variable as defined in PyMoIPserver.py
+                          Prefix # =
+                          Prefix (none) =  Specify a global variable (directly accessible from 'PyMoIPserver.py') prefixed by 'refs_prefix' and postfixed by 'MySession'
+                            Ex : Blabla references the _PyMoIP_Blabla_<MySession> variable as defined in PyMoIPserver.py
+                            ==> Those variables are similar to 'local' variables (ie : 1 per session) but might be reached from any session
+                            
+                      PostFixes (applies only to python list type variables) :
+                        Specific to list type variables, for 'Bla' variable in one of the forms (fields are numbered from 1, not 0)
+                            Bla:Field#
+                                Return field# of the list
+                            Bla:Field#:Subfield#
+                                Return Subfield# in Field# of the list
+                            Bla:*:Field#
+                                Return Field# from the list where field#1==MySession
+                                (Usefull to get any information as 'MyPseudo' or 'MyIP', etc from ListSession global variable)
+                        
+                    <VariableSize> is the size of the variable to be displayed (number of fill characters to print)
+                      If <VariableSize>=0 (or if <FillCharacter>=""), then no fill character is printed
+                    <FillCharacter> is the fill character to print before printing the variable
+                      If <FillCharacter>="" (or if <VariableSize>=0), then no fill character is printed
+                    
+    - FieldList ... List type, defines the list of Fields to be displayed after the videotext page file is displayed
+[TBC]
+
+    - BypassList .. List type, defines the list of Bypass to be tested on arrival to this arbo_node
+[TBC]
+BypassList .. List type, defines the list of Bypass to be tested on arrival to this arbo_node
+    [Warn] A missing arbo_node file will lead to an infinite loop if the 'proper' conditions are met.
+           ------------------------------------------------------------------------------------------
+        - At start arbo_node:
+            - A Bypass is setup as "if GotRom starts with 'P' or starts with 'Cp' then go to 'photovideotext' node.
+            - A HELP key link is defined to an 'help' node.
+            - None of the above arbo_node files are present
+        - It works at first arrival on the node because GotRom variable is not yet updated when arriving at start arbo_node (it's beeing received) ==> Bypass condition not met
+        - It fails if HELP key is pressed on the start arbo_node because :
+            - Current (start node) arbo_node is pushed to the index_stack
+            - New arbo_node (help node) is selected.
+                - While evaluating the new arbo_node, it fails because this node does not exist.
+            - As it's failling, it pops previous arbo_node (start node) from the index_stack (*)
+                - While evaluating the new arbo_node (start node), GotRom have been received/updated.
+                - The condition is met, so, we push again current (start node) arbo_node to the index_stack
+                - New arbo_node (photovideotext node) is selected.
+                - While evaluating the new arbo_node, it fails because this node does not exist. As it fails because this node does not exist, it loops to (*).
+                ==> No solution yet to break the loop except to restart PyMoIPserver as even a new received key won't be analyzed until a proper node is selected
+                ==> may be a loop counter that would break the loop ?
+
+    - DisplayList . List type, defines the list to be displayed after the videotext page file is displayed
+[TBC]
+
+    - MenuList .... List type, defines the list of menu items links of the menu, to be displayed or not, after the videotext page file is displayed
+[TBC]
+
+    - KeywordList . List type, defines the list of keyword links in menus, not to be displayed
+[TBC]
+
+
+
+
+Notes about videotext display page (UpdateDisplay() behaviour) :
+----------------------------------------------------------------
+A videotext page consist of several elements that may be refreshed or not, depending on the context
+- DoSendPage=True ==> Full page needs to be refreshed
+    - PreBytes (InsertBytes - evaluated previously elsewhere, usually for line 0 messages, cleared once displayed)
+    - Videotext page file contents
+    - PostBytes
+        - DisplayList[] (the list items to be evaluated and displayed)
+        - ConstList[] (the hardcoded items to be displayed)
+        - VarList[] (the variable items to be evaluated and displayed)
+    - PostFields
+        - All fields of FieldList[] but CurField (the field items to be evaluated and displayed, but not focussed)
+        - CurField (the field item to be displayed, currently with edit focus)
+
+- RefreshCurField=True ==> Only current field needs to be refreshed. Optionaly, may refresh previous field before refreshing current field - (not so usefull)
+    - PreBytes (InsertBytes - evaluated previously elsewhere, usually for line 0 messages, cleared once displayed)
+    - CurField (the field item to be displayed, currently with edit focus)
+
+
