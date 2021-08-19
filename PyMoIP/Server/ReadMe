@@ -99,7 +99,11 @@ An arbo_node defines a page_sequence (allowing several videotext pages to be dis
 Ex : page files ./bla_1_blu.vdt, ./bla_2_blu.vdt, <...> ./bla_18_blu.vdt might constitute a page_sequence of 18 pages, with a "bla_" PrefixFile and "_blu.vdt" PostfixFile.
 On arrival to this arbo_node, the first page will be displayed (here, ./bla_1_blu.vdt).
 - 'NEXT' key will display the next page of the sequence (here, ./bla_2_blu.vdt ... if the last page was displayed, next page is first page)
-- 'PREV' key will display the previous page of the sequence (here, ./bla_18_blu.vdt)
+    New 19/08/21 : This rollup behaviour is now optional when "TimerLink" is defined.
+    - By default, will simply follow "TimerLink"
+    - With "ForceStackNode" option, current node will be stacked before following "TimerLink"
+    - With "NextDontFollowTimerLink" parameter, will revert to original behaviour
+- 'PREV' key will display the previous page of the sequence (here, ./bla_18_blu.vdt) as the last page was displayed
 - FirstFile must be a positive integer not null (ie : not necessary 1)
 - LastFile must be a positive integer not null (ie : not necessary 1)
 - If a page file is missing, an error is displayed on zero line
@@ -112,6 +116,9 @@ When certain events occurs, if the matching link is defined, the user will be re
 'HELP' key : Takes a backup of current arbo_node in the index_stack then redirects the user to this arbo_node link.
              (Next press of 'INDEX' key will redirect the user to current arbo_node)
 'Time' events : No backup to index_stack is taken, the user is directly redirected to this arbo_node link when the event raises.
+    Note : This behaviour is now optional when "TimerLink" is defined and Timer event is raised.
+    - By default, will simply follow "TimerLink"
+    - With "ForceStackNode" option, current node will be stacked (by module_menu) before following "TimerLink"
 
 The 'TIME' structure.
 =====================
@@ -130,7 +137,9 @@ A module consist of one entry point per server event :
 - 'Key XXX'
 - LIB
 
-Current available modules are :
+New 19/08/21 : The module may receive optionnal parameters from 'arbo_file' as "module_name,option1,option2" instead of just "module_name"
+
+Currently available modules are :
 - module_menu.py
 - module_teletel.py
 
@@ -212,10 +221,17 @@ BypassList .. List type, defines the list of Bypass to be tested on arrival to t
     - DisplayList . List type, defines the list to be displayed after the videotext page file is displayed
 [TBC]
 
-    - MenuList .... List type, defines the list of menu items links of the menu, to be displayed or not, after the videotext page file is displayed
+    - MenuList .... List type, defines the list of menu items links of the menu, to be displayed (or not), after the videotext page file is displayed
+           Used by module_menu and PyMoIP_server (for display purpose only)
+           Allow a numeric selection of the arbo link choosen
+           Will stack current arbo node before following the link
+           New 19/08/21 : Stacking is optionnal and avoided with "DontStackNode" parameter
 [TBC]
 
     - KeywordList . List type, defines the list of keyword links in menus, not to be displayed
+           Used by module_menu only
+           Allow a keyword to select the link choosen
+           Will always stack current arbo node before following the link
 [TBC]
 
 
