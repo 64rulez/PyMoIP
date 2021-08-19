@@ -7,7 +7,7 @@ Updated 08/2021 :
 
 [Edit 07/2020 reviewed 08/2021] Overview
 
-The aim of this project is to try to provide some technical alternatives to VoIP, in order to allow the usage of French Minitel terminals in our modern era, where PSTN technology is disapearing from the entire planet.
+The aim of this project is to try to provide some technical alternatives to VoIP, in order to allow the usage of French Minitel terminals in our modern era, where PSTN technology is disapearing from the entire planet. As a secondary, but not less essential goal, it allows the creation of new videotext Minitel services and contents.
 
 As VoIP seems to be the natural replacement to classical PSTN transport, many drawbacks are observed (mostly related to quality and stability of the V23 link) make think that this solution is not acceptable. Regular FAX transport have been adapted to IP transport with T38 and is now well supported. Regular modem transport have been adapted to IP transport with V150.1 but this approach remains unreachable to normal people due to the ultra high cost of the rare hardware available.
 
