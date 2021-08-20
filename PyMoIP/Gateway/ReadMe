@@ -19,8 +19,8 @@ Purpose :
   -----
 This program will accept connections from multiple remote users (clients) what are using WebSocket and/or Telnet protocol. Those client might be :
 - A WS client (MiEdit) running from your browser (see www.teletel.org)
-- A telnet client (iTimtel or any legacy emulator using telnet) running from your PC
-- A serial to WS bridge (PyMoIP user) allowing the usage of a real Minitel
+- A telnet client (iTimtel or any legacy emulator using telnet protocol) running from your PC
+- A serial to WS bridge (PyMoIP user) allowing the usage of a real hardware (IE : Minitel)
 
 Once a user session is accepted, communication from the client is routed to the default server with the proper parameters, as defined from the command line.
 [Nb1 : Currently, only WS servers are reachable - it's planned to also reach telnet servers in the future]
