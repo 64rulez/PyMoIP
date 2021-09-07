@@ -63,7 +63,7 @@ TIMEOUT_TN_DISPLAY_MAX = 365*24*60*60 # La session telnet DISPLAY dure maximum 1
 
 TIMEOUT_GTW =5                    # Nb secondes avant retry pour communication GTW<=>Teletel
 BANNED_MICROSESONDS = 1000000     # Nb de microsecondes minimal pour une session entrante (sinon, banissement de l'IP) [1000000 = 10 secondes]
-BANNED_DAYS = 10                  # Banissement pour 10 jours
+BANNED_DAYS = 100                 # Banissement pour 100 jours
 BANNED_SECONDS = 20               # et 20 secondes
 
 class GatewayServer:
@@ -74,7 +74,7 @@ class GatewayServer:
     server.
     '''
 
-    def __init__(self, MyIP=None, ws_port=None, tcp_port=None, display_port=None, teletel_server=None, target_uri="ws://localhost:8765",target_ping=None, target_sub=[]):
+    def __init__(self, MyIP=None, ws_port=None, tcp_port=None, display_port=None, teletel_server=None, target_uri="ws://localhost:8765",target_ping=None, target_sub=[], config_path="./Gateway/"):
         logging.debug("Server %r created", self)
         
         self.DebugIAC = False
@@ -120,6 +120,12 @@ class GatewayServer:
         
         self.Banned = {}          # Liste des IP bannies avec leurs date de banissement
         self.BannedFile = "/tmp/banned.json"
+        
+        self.ConfigPath = config_path  # Chemin du fichier de configuration
+        self.ConfigFile = config_path + "GatewayConfig.json"
+        self.Config = {}          # Détail de la configuration
+        
+        self.DumpFileBase=""
 
         # by tracking clients, we can write a 'kick' function and have a cleaner shutdown (in the case of the tcp server)
 
@@ -167,6 +173,12 @@ class GatewayServer:
         self._running = True
 
         self.InitBanned()
+        self.InitConfig()
+        if self.GetConfigValue("DumpData")==True:
+          self.DumpFileBase=self.GetConfigValue("DumpDataPath")+"DumpData_"+str(self.GetConfigValue("GatewayExecCount"))+"_"
+        else:
+          self.DumpFileBase=""
+        #self.UpdateConfig()
 
         # We create a list of coroutines, since we might be running more
         # than just one if we have a TCP Server AND a WebSocketServer.
@@ -259,6 +271,19 @@ class GatewayServer:
         self.UserSessions[pid].MyStartTime=datetime.now()
         self.UserSessions[pid].MsgToDisplay("_register_tcp() Started for pid {} from {} at {}\r\n".format(pid,self.UserSessions[pid].MyIP,self.UserSessions[pid].MyStartTime.strftime("%Y-%m-%d %H:%M:%S")),self.UserSessions)
 
+        if len(self.DumpFileBase)>0:
+          self.UserSessions[pid].MyDumpFile=self.DumpFileBase+str(pid)+".dmp"
+          with open(self.UserSessions[pid].MyDumpFile, "w") as myfile:
+            myfile.write(self.UserSessions[pid].MyIP)
+            myfile.write("\r\n")
+            myfile.write(self.UserSessions[pid].MyPort)
+            myfile.write("\r\n")
+            myfile.write(self.UserSessions[pid].MyAccess)
+            myfile.write("\r\n")
+            myfile.write(self.UserSessions[pid].MyStartTime.strftime("%Y-%m-%d %H:%M:%S"))
+            myfile.write("\r\nInput\r\n")
+        else:
+          self.UserSessions[pid].MyDumpFile=""
 
         # Now we create two coroutines, one for handling incoming messages, and one for handling outgoing messages.
 
@@ -442,6 +467,7 @@ class GatewayServer:
         LineBuffer=""
         
         CountChar=0
+        CountFastChar=0
         TmpBuf=""
         start_time = time.time()
         
@@ -492,6 +518,10 @@ class GatewayServer:
               self.UserSessions[pid].MsgToDisplay("_incoming_tcp() TIMEOUT_TN_CLIENT for pid {} from {} at {}\r\n".format(pid,self.UserSessions[pid].MyIP,datetime.now().strftime("%Y-%m-%d %H:%M:%S")),self.UserSessions)
               break
             if msg:
+              if len(self.UserSessions[pid].MyDumpFile)>0:
+                with open(self.UserSessions[pid].MyDumpFile, "ab") as myfile:
+                  myfile.write(msg)
+              
               MySession.MyCharTotalRecv+=1
               MySession.MyCharSessionRecv+=1
               CountChar+=1
@@ -613,10 +643,26 @@ class GatewayServer:
                 TmpBuf+=msg
               elif CountChar==144 and ((time.time() - start_time) <1):
                 TmpBuf+=msg
-                print(TmpBuf)              
+                #print(TmpBuf)              
+                print("GatewayServer.py->_incoming_tcp() TmpBuf ignored as 144 first bytes received in less than 1 second.")
+                # dirty fix for iTimtel that will also break some port scanners ... Don't print TmpBuf as it may hang with bad unicode  
                 CountChar=150
               else:              
                 MySession.MsgFromUser(msg)
+                if ((CountChar-150) / ((time.time() - start_time)+1))>10:
+                  print("GatewayServer.py->_incoming_tcp() WARN : Remote user too fast !")
+                  #CountFastChar+=1
+                  if CountFastChar>60:
+                    print("GatewayServer.py->_incoming_tcp() ERROR : Remote user too fast !")
+              #print ((CountChar-150) / ((time.time() - start_time)+1))  # Caractères par seconde
+              if ((CountChar-150) / ((time.time() - start_time)+1))>10: # Si plus de 10 caractères par seconde
+                CountFastChar+=1        # On compte les caracteres en exces de vitesse
+                if CountFastChar<5:     # Si moins de 5 [devrait être 17*3 pour réponse complète RAMs/ROM]
+                  #print("GatewayServer.py->_incoming_tcp() WARN : Remote user too fast ! [OK]")
+                  logging.info("GatewayServer.py->_incoming_tcp() Remote user too fast for %s", pid)
+                else:
+                  #print("GatewayServer.py->_incoming_tcp() Remote user really too fast !")
+                  logging.info("GatewayServer.py->_incoming_tcp() Remote user really too fast for %s - should be stopped", pid)
 
         if reader.at_eof():
           try:
@@ -840,7 +886,8 @@ class GatewayServer:
                 TmpBuf+=msg
               elif CountChar==144 and ((time.time() - start_time) <1):
                 TmpBuf+=msg
-                print(TmpBuf)              
+                #print(TmpBuf)              
+                print("GatewayServer.py->_incoming_display() TmpBuf ignored as 144 first bytes received in less than 1 second.")
                 CountChar=150
               else:              
                 #MySession.MsgFromUser(msg)
@@ -1677,12 +1724,59 @@ class GatewayServer:
         for (_pid, ThisSession) in self.UserSessions:
             ThisSession.MsgToUser(message,False)
 
+
+    def InitConfig(self):
+      try:
+        with open(self.ConfigFile) as f:
+          self.Config = json.load(f)
+        print ("Config list")
+        self.SetConfigValue("GatewayExecCount",self.GetConfigValue("GatewayExecCount")+1)
+        #print(self.GetConfigValue("blabla"))
+        #self.SetConfigValue("blublu","")
+        self.UpdateConfig()
+        print (self.Config)
+        #for ip,date in self.Banned:
+        #  print (ip)
+        #  print (date)
+      except:
+        logging.info("##### InitConfig %s failled.",self.ConfigFile)
+        self.Config = {}
+        self.Config["GatewayExecCount"]=1
+        self.UpdateConfig()
+        err=sys.exc_info()
+        for item in err:
+          print(item)
+        raise
+        #pass
+
+    def GetConfigValue(self,item):
+      #print("GetConfig " + item)
+      if item in self.Config:
+        return self.Config[item]
+      else:
+        return ""
+        
+    def SetConfigValue(self,item,value):
+      #print("SetConfig " + item + "-")
+      #print(value)
+      if item in self.Config:
+        self.Config.pop(item)
+      if type(value) == str: 
+        if value != "":
+          self.Config[item]=value
+      else:
+        self.Config[item]=value
+        
+    def UpdateConfig(self):
+      with open(self.ConfigFile, 'w') as json_file:
+        json.dump(self.Config, json_file)
+
+
     def InitBanned(self):
       try:
         with open(self.BannedFile) as f:
           self.Banned = json.load(f)
-        print ("Banned list")
-        print (self.Banned)
+        print ("Banned count = " +str(len(self.Banned)))
         #for ip,date in self.Banned:
         #  print (ip)
         #  print (date)

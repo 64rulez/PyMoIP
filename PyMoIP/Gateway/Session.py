@@ -38,6 +38,7 @@ class Session():
         self.MyCharSessionSent=0
         self.MyCharSessionRedir=0
         self.MyStartTime=None
+        self.MyDumpFile=""
         self.IsRedirected=False
         print("Session.py->__init__()")
         print("_parser=_nogame_parser")
@@ -182,12 +183,13 @@ class Session():
             #  GotI=False
             if GotS==True:
               if GotScount==0:
-                TempItem='"'+item
+                TempItem=item
                 item=""
               else:
                 if item[0]=="-":
                   GotS=False
-                  TempItem=TempItem+'"'
+                  if TempItem[0]!='"':
+                    TempItem=TempItem+'"'
                 else:
                   TempItem=TempItem+' '+item
                   item=""
@@ -206,7 +208,8 @@ class Session():
               MyArgs.append(item) 
           if GotS==True:
             GotS=False
-            TempItem=TempItem+'"'
+            if TempItem[0]!='"':
+              TempItem=TempItem+'"'
             #print(TempItem) 
             MyArgs.append(TempItem) 
           #print(MyArgs)
