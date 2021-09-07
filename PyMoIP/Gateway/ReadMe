@@ -1,3 +1,14 @@
+ReadMe (Updated the 07/09/21)
+=============================
+
+Fixed a binary <=> unicode issue
+Added DumpData option
+Added GatewayConfig.json mecanism
+Updated banned.json
+Prepared for next revision : ban @IPs where "typing too fast" users are detected
+Increased default ban period to 100 days
+Created Wiki for Gateway & scripts
+
 ReadMe (Updated the 13/08/21)
 
 PyMoIP gateway
