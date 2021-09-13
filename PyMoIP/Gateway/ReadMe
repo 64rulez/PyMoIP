@@ -1,3 +1,11 @@
+ReadMe (Updated the 13/09/21)
+=============================
+Moved biject.py from util/ folder (folder not needed any more)
+Improved some comments about timeouts, overall communications, and display messages
+Reduced minimal session duration from 10s to 1s to avoid false positive
+Implemented ban when typing too fast
+
+
 ReadMe (Updated the 07/09/21)
 =============================
 
