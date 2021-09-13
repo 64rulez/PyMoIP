@@ -16,7 +16,7 @@ Thank you, Mark.
 import logging
 import traceback
 import warnings
-from Gateway.util.biject import Biject
+from Gateway.biject import Biject
 # for asynchronous stuff
 import asyncio
 # required for websockets to work
@@ -38,23 +38,30 @@ logger.addHandler(logging.StreamHandler())
 # Timeouts généraux pour le client (Telnet ou WS)
 #
 TIMEOUT_TN_CLIENT     =   10*60   # La session client telnet est fermée après 10 minutes sans caractère reçu 
-TIMEOUT_TN_CLIENT_MAX = 2*60*60   # La session client telnet dure maximum 1 heure 
+#                                 # await reader.read() (depuis _incoming_tcp())
+TIMEOUT_TN_CLIENT_MAX = 2*60*60   # La session client telnet dure maximum 1 heure [devrait être au moins supérieure aux timeouts remote] 
+#                                 # await _ws_connect_to_server+in/out (depuis _register_tcp())
 TIMEOUT_WS_CLIENT     =   10*60   # La session client WS est fermée après 10 minutes sans caractère reçu
-TIMEOUT_WS_CLIENT_MAX = 2*60*60   # La session client WS dure maximum 1 heure
+#                                 # await websocket.recv() (depuis _incoming_ws())
+TIMEOUT_WS_CLIENT_MAX = 2*60*60   # La session client WS dure maximum 1 heure [devrait être au moins supérieure aux timeouts remote]
+#                                 # await _ws_connect_to_server+in/out (depuis _register_ws())
 #
 # Timeouts pour la redirection (Telnet ou WS)
 #
-TIMEOUT_TN_REMOTE =        2*60   # La session remote TN dure maximum 1 heure
+TIMEOUT_TN_REMOTE =        2*60   # La session remote TN est fermée après 10 minutes sans caractère reçu 
 TIMEOUT_TN_REMOTE_MAX = 2*60*60   # La session remote TN dure maximum 2 heures
-TIMEOUT_WS_REMOTE =       60*60   # La session remote WS dure maximum 1 heure
-TIMEOUT_WS_REMOTE_MAX =   60*60   # La session remote WS dure maximum 2 heures
+TIMEOUT_WS_REMOTE =       60*60   # La session remote WS dure maximum 2 heures [fin de la redirection et retour à télétel] (quelque soient les caractères reçus et envoyés)
+#                                 # await in/out ws (après connect redirigé)
+TIMEOUT_WS_REMOTE_MAX =   60*60   # La session remote WS dure maximum 2 heures [BUG - ne termine pas la redirection mais retourne à teletel en parrallèle - inutile ? => Garder idem TIMEOUT_WS_REMOTE]
+#                                 # await _ws_connect_to_server (quand redirigé)
 #
 # Timeouts sans redirection (Telnet ou WS)
 #
-TIMEOUT_TN_SERVER =        3*60   # La session serveur Telnet (serveur par défaut/télétel) est fermée après 10 minutes sans caractère reçu
-TIMEOUT_TN_SERVER_MAX = 2*60*60   # La session serveur Telnet (serveur par défaut/télétel) dure maximum 2 heures
-TIMEOUT_WS_SERVER =       60*60   # La session serveur WS (serveur par défaut/télétel) est fermée après 10 minutes sans caractère reçu
-TIMEOUT_WS_SERVER_MAX = 2*60*60   # La session serveur WS (serveur par défaut/télétel) dure maximum 2 heures
+TIMEOUT_TN_SERVER =        3*60   # La session serveur Telnet (serveur par défaut/télétel) est fermée après 10 minutes sans caractère reçu ==> Inutilisé
+TIMEOUT_TN_SERVER_MAX = 2*60*60   # La session serveur Telnet (serveur par défaut/télétel) dure maximum 2 heures ==> Inutilisé
+TIMEOUT_WS_SERVER =       60*60   # La session serveur WS (serveur par défaut/télétel) est fermée après 10 minutes sans caractère reçu 
+#                                 # await in/out ws (après connect non redirigé)
+TIMEOUT_WS_SERVER_MAX = 2*60*60   # La session serveur WS (serveur par défaut/télétel) dure maximum 2 heures ==> Inutilisé
 #
 # Timeouts pour la console (Display=Telnet seulement)
 #
@@ -62,7 +69,7 @@ TIMEOUT_TN_DISPLAY =     365*24*60*60 # La session telnet DISPLAY est fermée ap
 TIMEOUT_TN_DISPLAY_MAX = 365*24*60*60 # La session telnet DISPLAY dure maximum 1 journée 
 
 TIMEOUT_GTW =5                    # Nb secondes avant retry pour communication GTW<=>Teletel
-BANNED_MICROSESONDS = 1000000     # Nb de microsecondes minimal pour une session entrante (sinon, banissement de l'IP) [1000000 = 10 secondes]
+BANNED_MICROSESONDS =  100000     # Nb de microsecondes minimal pour une session entrante (sinon, banissement de l'IP) [1000000 = 10 secondes]
 BANNED_DAYS = 100                 # Banissement pour 100 jours
 BANNED_SECONDS = 20               # et 20 secondes
 
@@ -95,31 +102,42 @@ class GatewayServer:
         self.targeturi=target_uri
         self.targetping=target_ping
         self.targetsub=target_sub
-        
-        self._ws_server = {}        # websocket[pid] vers serveur
-
-        self._ws_server_bis = {}        # websocket[pid] vers serveur
+        #
+        # Connexions vers serveurs 'WebSocket'
+        #
+        self._ws_server = {}                    # websocket[pid] connexions clients vers serveur videotext (Teletel:8765)
+        self._ws_server_redirected = {}         # websocket[pid] connexions clients vers serveur videotext (Redirigé) [si session.redirected=True]
+        self._ws_server_bis = {}                # websocket[pid] connexion client vers le canal de commande serveur (serveur Teletel:8764)
+        #
+        # Queue de communication vers le canal de commande
+        #
         self._ws_server_bis_queue = asyncio.Queue()
         self._ws_server_bis_connected=False
 
         self.teletel_server = teletel_server
-
+        #
+        # Queue de communication vers une session utilisateur (TCP/Display, WS)
+        #
         self.msgs = asyncio.Queue()
-
+        #
+        # Serveurs (WS et TN)
+        #
         self.display_port = display_port
-        self.display_server = None
-        self._display_clients = {}
-
+        self.display_server = None              # Serveur "Display" (8999)
+        self._display_clients = {}              # Tous les clients du serveur "Display"
+        #
         self.tcp_port = tcp_port
-        self.tcp_server = None
-        self._tcp_clients = {}
-
+        self.tcp_server = None                  # Serveur "TCP" (9000)
+        self._tcp_clients = {}                  # Tous les clients du serveur "TCP"
+        #
         self.ws_port = ws_port
-        self.ws_server = None
-        self._ws_clients = {}
-        
-        self.Banned = {}          # Liste des IP bannies avec leurs date de banissement
+        self.ws_server = None                   # Serveur "WS" (9001)
+        self._ws_clients = {}                   # Tous les clients du serveur "WS"
+        #
+        self.Banned = {}                        # Liste des IP bannies avec leurs date de banissement
         self.BannedFile = "/tmp/banned.json"
+        self.NeverBanned = {}                   # Liste des IP jamais bannies avec leurs date de banissement
+        self.NeverBannedFile = config_path + "neverbanned.json"
         
         self.ConfigPath = config_path  # Chemin du fichier de configuration
         self.ConfigFile = config_path + "GatewayConfig.json"
@@ -165,7 +183,7 @@ class GatewayServer:
         """
         logging.debug("Starting server...")
         # First, check to make sure the same server instance isn't being
-        # run multiple times.g
+        # run multiple times.
         if self._running:
             raise RuntimeError(f"server {self!r} is already running")
 
@@ -663,6 +681,7 @@ class GatewayServer:
                 else:
                   #print("GatewayServer.py->_incoming_tcp() Remote user really too fast !")
                   logging.info("GatewayServer.py->_incoming_tcp() Remote user really too fast for %s - should be stopped", pid)
+                  break
 
         if reader.at_eof():
           try:
@@ -912,9 +931,13 @@ class GatewayServer:
                   MySession.MsgToUser("{}\r\n".format(Session.restart_teletel_server(self)),False)
                 elif msg == "t":
                   MySession.MsgToUser("\r\nTimeout definitions:\r\n",False)
-                  MySession.MsgToUser("ws_activity_timeout:{:04d} seconds - tcp_activity_timeout:{:04d} seconds ... Number of seconds allowed to wait between user client activity (key press).\r\n".format(TIMEOUT_WS_CLIENT,TIMEOUT_TN_CLIENT),False)
-                  MySession.MsgToUser("ws_session_timeout :{:04d} seconds - tcp_session_timeout :{:04d} seconds ... Number of seconds allowed for a complete/full user session.\r\n".format(TIMEOUT_WS_CLIENT_MAX,TIMEOUT_TN_CLIENT_MAX),False)
-                  MySession.MsgToUser("ws_remote_timeout  :{:04d} seconds - tcp_remote_timeout  :{:04d} seconds ... Number of seconds allowed while a session is remote/redirected.\r\n".format(TIMEOUT_WS_REMOTE_MAX,TIMEOUT_TN_REMOTE_MAX),False)                  
+                  MySession.MsgToUser("\r\nClient activity ...\r\n",False)
+                  MySession.MsgToUser("ws_activity_timeout    :{:04d} seconds - tcp_activity_timeout    :{:04d} seconds ... allowed to wait between user/client activity (key press).\r\n".format(TIMEOUT_WS_CLIENT,TIMEOUT_TN_CLIENT),False)
+                  MySession.MsgToUser("ws_session_timeout     :{:04d} seconds - tcp_session_timeout     :{:04d} seconds ... allowed for a complete/full user/client session.\r\n".format(TIMEOUT_WS_CLIENT_MAX,TIMEOUT_TN_CLIENT_MAX),False)
+                  MySession.MsgToUser("\r\nRedirected activity ...\r\n",False)
+                  MySession.MsgToUser("ws_remote_timeout      :{:04d} seconds - tcp_remote_timeout      :{:04d} seconds ... allowed while a session is remote/redirected (will revert to teletel).\r\n".format(TIMEOUT_WS_REMOTE,TIMEOUT_TN_REMOTE),False)                  
+                  MySession.MsgToUser("ws_remote_timeout_max  :{:04d} seconds - tcp_remote_timeout_max  :{:04d} seconds ... allowed while a session is remote/redirected (will bug !).\r\n".format(TIMEOUT_WS_REMOTE_MAX,TIMEOUT_TN_REMOTE_MAX),False)                  
+                  MySession.MsgToUser("\r\nOther activity ...\r\n",False)
                   MySession.MsgToUser("command_gateway_timeout:{:04d} seconds ................................... Number of seconds to wait between connection retry on command channel.\r\n".format(TIMEOUT_GTW),False)
                   MySession.MsgToUser("display_activity_timeout :{:04d} seconds - display_session_timeout :{:04d} seconds ... Number of seconds allowed and timeout for a display session.\r\n".format(TIMEOUT_TN_DISPLAY,TIMEOUT_TN_DISPLAY_MAX),False)
                 elif msg == "s":
@@ -1294,8 +1317,9 @@ class GatewayServer:
                             timeout=TIMEOUT_WS_REMOTE_MAX,
                             return_when=asyncio.FIRST_COMPLETED)
                     if len(done) == 0:
-                        self._nbr_ws_remote_timeout+=1
-                        print("Timeout command_ws() TIMEOUT_WS_REMOTE_MAX")
+                      self._nbr_ws_remote_timeout+=1
+                      print("Timeout command_ws() TIMEOUT_WS_REMOTE_MAX")
+                      self.UserSessions[pid].MsgToDisplay("_incoming_ws() TIMEOUT_WS_REMOTE_MAX for pid {} from {} at {}\r\n".format(pid,self.UserSessions[pid].MyIP,datetime.now().strftime("%Y-%m-%d %H:%M:%S")),self.UserSessions)
                     self._ws_server_bis_queue.put_nowait("UserRedirectEnded,,,"+str(pid)+","+str(MySession.MySession))
                     MySession.MySession=-1
                     print("##########CLOSED")
@@ -1370,9 +1394,10 @@ class GatewayServer:
                                 timeout=TIMEOUT_WS_SERVER ,
                                 return_when=asyncio.FIRST_COMPLETED)
                 loop_nbr+=1
-                print("asyncio.wait NoRemote completed")
+                print("GatewayServer.py->_ws_connect_to_server() asyncio.wait [NoRemote] completed")
               else:
                 self._ws_server_bis_queue.put_nowait("UserRedirected,,,"+str(pid)+","+str(MySession.MySession))
+                self._ws_server_redirected[pid] = websocket
                 MySession.IsRedirected=True
                 print("##########REDIRECTED")
                 #print ("GatewayServer.py->_ws_connect_to_server() redirected to " + uri)
@@ -1385,30 +1410,60 @@ class GatewayServer:
                                 timeout=TIMEOUT_WS_REMOTE ,
                                 return_when=asyncio.FIRST_COMPLETED)
                 MySession.IsRedirected=False
-                print("asyncio.wait Remote (redirected) completed")
+                print("GatewayServer.py->_ws_connect_to_server() asyncio.wait [Remote (redirected)] completed")
               if len(done)==0:      # Un timeout s'est produit
                 if remote==True:
+                  #
+                  # Client <=> Remote (redirected)
+                  #
                   self.UserSessions[pid].MsgToDisplay("_ws_connect_to_server() TIMEOUT_WS_REMOTE for pid {} from {} at {}\r\n".format(pid,self.UserSessions[pid].MyIP,datetime.now().strftime("%Y-%m-%d %H:%M:%S")),self.UserSessions)
                   MySession.MsgToUser("\x1f@AEND INACTIVE REDIR\x18\x0a",False)
                   logging.info("%s _ws_connect_to_server() [%s] remote inactivity Timeout (%s) reached", pid, uri, TIMEOUT_WS_REMOTE)
                   print("Timeout : TIMEOUT_WS_REMOTE reached")
                   self._nbr_ws_activity_remote_timeout+=1
                 else:
+                  #
+                  # Client <=> Local (not redirected)
+                  #
                   if MySession.IsRedirected!=True:
                     self.UserSessions[pid].MsgToDisplay("_ws_connect_to_server() TIMEOUT_WS_SERVER for pid {} from {} at {}\r\n".format(pid,self.UserSessions[pid].MyIP,datetime.now().strftime("%Y-%m-%d %H:%M:%S")),self.UserSessions)
                     MySession.MsgToUser("\x1f@AEND INACTIVE\x18\x0a",False)
                     logging.info("%s _ws_connect_to_server() [%s] server inactivity Timeout (%s) reached", pid, uri, TIMEOUT_WS_SERVER)
                     print("Timeout : TIMEOUT_WS_SERVER reached")
                     self._nbr_ws_activity_server_timeout+=1
+
+
               else:
                 if remote==True:
-                  print("_ws_connect_to_server() ending while redirected with no exception")
+                  print("INFO GatewayServer.py->_ws_connect_to_server() ending while redirected with no exception")
                   #print("pending:")
                   #print(pending)
                   #print("done:")
                   #print(done)
                 else:
-                  print("_ws_connect_to_server() ending while not redirected with no exception")
+                  print("INFO GatewayServer.py->_ws_connect_to_server() ending while not redirected with no exception")
+                  #
+                  # Close redir side
+                  #
+                  try:
+                      if self.UserSessions[pid].IsRedirected == True:
+                        print("INFO GatewayServer.py->_ws_connect_to_server() self.UserSessions[pid].IsRedirected == True")
+                      else:
+                        print("INFO GatewayServer.py->_ws_connect_to_server() self.UserSessions[pid].IsRedirected == False")
+          
+                      websocket = self._ws_server_redirected[pid]
+                      if not websocket.closed:
+                        await websocket.close()
+                        print("INFO GatewayServer.py->_ws_connect_to_server() WebSocket remote server redirected side closed")
+                      else:
+                        print("INFO GatewayServer.py->_ws_connect_to_server() WebSocket remote server redirected side already closed")
+                      del self._ws_server_redirected[pid]
+                  except KeyError:
+                      # pid did not exist (was not connected to server ?)
+                      print("WARN GatewayServer.py->_ws_connect_to_server() no WS to remote server redirected - server was already disconnected ?")
+
+
+
               if len(pending):
                   print("_ws_connect_to_server() canceling all pending tasks")
                   for task in pending:
@@ -1686,7 +1741,9 @@ class GatewayServer:
             return
             
         self._ws_server_bis_queue.put_nowait("UserGone,,,"+str(pid))
-
+        #
+        # Close client side
+        #
         try:
             websocket = self._ws_clients[pid]
             if not websocket.closed:
@@ -1698,7 +1755,9 @@ class GatewayServer:
         except KeyError:
             # pid did not exist (was not connected to server ?)
             print("WARN GatewayServer.py->on_user_quit() no WS from client - client was already disconnected or came from telnet ?") 
-
+        #
+        # Close server side
+        #
         try:
             websocket = self._ws_server[pid]
             if not websocket.closed:
@@ -1710,6 +1769,25 @@ class GatewayServer:
         except KeyError:
             # pid did not exist (was not connected to server ?)
             print("WARN GatewayServer.py->on_user_quit() no WS to remote server - server was already disconnected ?")
+        #
+        # Close redir side
+        #
+        try:
+            if self.UserSessions[pid].IsRedirected == True:
+              print("INFO GatewayServer.py->on_user_quit() self.UserSessions[pid].IsRedirected == True")
+            else:
+              print("INFO GatewayServer.py->on_user_quit() self.UserSessions[pid].IsRedirected == False")
+
+            websocket = self._ws_server_redirected[pid]
+            if not websocket.closed:
+              websocket.close()    # Fails as not async
+              print("INFO GatewayServer.py->on_user_quit() WebSocket remote server redirected side closed")
+            else:
+              print("INFO GatewayServer.py->on_user_quit()WebSocket remote server redirected side already closed")
+            del self._ws_server_redirected[pid]
+        except KeyError:
+            # pid did not exist (was not connected to server ?)
+            print("INFO GatewayServer.py->on_user_quit() no WS to remote server redirected - server was already disconnected ?")
 
         del self.UserSessions[pid]
              
@@ -1777,9 +1855,17 @@ class GatewayServer:
         with open(self.BannedFile) as f:
           self.Banned = json.load(f)
         print ("Banned count = " +str(len(self.Banned)))
-        #for ip,date in self.Banned:
-        #  print (ip)
-        #  print (date)
+        try:
+          with open(self.NeverBannedFile) as f:
+            self.NeverBanned = json.load(f)
+          print ("Never banned count = " +str(len(self.NeverBanned)))
+          print(self.NeverBanned)
+          #for ip,name in self.NeverBanned:
+          #  print (ip)
+          #  print (name)
+        except:
+          logging.info("##### InitBanned %s failled.",self.NeverBannedFile)
+          pass
       except:
         logging.info("##### InitBanned %s failled.",self.BannedFile)
         self.Banned = {}
@@ -1796,6 +1882,11 @@ class GatewayServer:
         if BannedIP == IP:
           DontBan=True
       if DontBan==False:
+        if BannedIP in self.NeverBanned:
+          DontBan=True
+          # was not banned at all
+          logging.info("##### AddBanned ==  (Never) %s.",BannedIP)
+      if DontBan==False:
         logging.info("##### BANNED %s since %s.",BannedIP,BannedEndTime)
         self._nbr_banned+=1
         self.Banned[BannedIP]=BannedEndTime.isoformat()
@@ -1806,29 +1897,34 @@ class GatewayServer:
     def check_banned(self,BannedIP,source):
       IsBanned=False
       BannedEndTime=datetime.now()
-      if BannedIP in self.Banned:
-        WasBanned=datetime.fromisoformat(self.Banned[BannedIP])
-        BannedDelta = BannedEndTime-WasBanned
-        if BannedDelta.days<=BANNED_DAYS:
-          if BannedDelta.days==BANNED_DAYS:
-            if BannedDelta.seconds<=BANNED_SECONDS:
-              IsBanned=True
-            else:
-              self._nbr_unbanned+=1
-              self.Banned.pop(BannedIP)
-              logging.info("##### BANNED %s cleared (seconds).",BannedIP)
-              self.UpdateBanned()
-          else:
-            IsBanned=True
-        else:
-          self.Banned.pop(BannedIP)
-          logging.info("##### BANNED %s cleared (days).",BannedIP)
-          self.UpdateBanned()
+      if BannedIP in self.NeverBanned:
+          # was not banned at all
+          logging.info("##### IsBanned == False (Never) %s.",BannedIP)
+          pass 
       else:
-        # was not banned at all
-        pass 
+        if BannedIP in self.Banned:
+          WasBanned=datetime.fromisoformat(self.Banned[BannedIP])
+          BannedDelta = BannedEndTime-WasBanned
+          if BannedDelta.days<=BANNED_DAYS:
+            if BannedDelta.days==BANNED_DAYS:
+              if BannedDelta.seconds<=BANNED_SECONDS:
+                IsBanned=True
+              else:
+                self._nbr_unbanned+=1
+                self.Banned.pop(BannedIP)
+                logging.info("##### BANNED %s cleared (seconds).",BannedIP)
+                self.UpdateBanned()
+            else:
+              IsBanned=True
+          else:
+            self.Banned.pop(BannedIP)
+            logging.info("##### BANNED %s cleared (days).",BannedIP)
+            self.UpdateBanned()
+        else:
+          # was not banned at all
+          pass 
       if IsBanned:
-        logging.info("##### IsBanned == True %s since %s from %s.",BannedIP,BannedEndTime,source)
+        logging.info("##### IsBanned == True %s since %s from %s.",BannedIP,WasBanned,source) # BannedEndTime => WasBanned
         self.add_banned(BannedIP,BannedEndTime)
       return IsBanned
 
