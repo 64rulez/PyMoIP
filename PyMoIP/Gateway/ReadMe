@@ -1,3 +1,7 @@
+ReadMe (Updated the 14/09/21)
+=============================
+Support for speed limits - also fixes some end of redirection issues.
+
 ReadMe (Updated the 13/09/21)
 =============================
 Moved biject.py from util/ folder (folder not needed any more)
@@ -102,4 +106,4 @@ It will allow to :
 - Kill Teletel server (IE : the PID using the command channel port/IP)
 - Restart Teletel server once killed (with parameters saved before kill)
 
-Credits : Code initially inspired by SWAMPYMUD joined there
+Credits : Code initially inspired by SWAMPYMUD joined somewhere here
