@@ -1,1 +1,1 @@
-{"DumpData": false, "DumpDataPath": "/home/pi/PyMoIP_dir/Dumps/", "GatewayExecCount": 0}
+{"DumpData": false, "DumpDataPath": "/home/pi/PyMoIP_dir/Dumps/", "LimitTcpSpeed": 1.2, "LimitWsSpeed": 1.2, "GatewayExecCount": 0}

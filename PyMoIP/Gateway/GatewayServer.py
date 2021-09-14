@@ -26,6 +26,7 @@ import time
 import os
 from datetime import datetime
 import json
+from struct import *
 
 from Gateway.Session import Session
 
@@ -142,8 +143,12 @@ class GatewayServer:
         self.ConfigPath = config_path  # Chemin du fichier de configuration
         self.ConfigFile = config_path + "GatewayConfig.json"
         self.Config = {}          # Détail de la configuration
-        
-        self.DumpFileBase=""
+        #
+        # Paramètres de configuration obtenus dans "GatewayConfig.json" 
+        #        
+        self.DumpFileBase=""          # si self.GetConfigValue("DumpData")==True: ==> self.GetConfigValue("DumpDataPath")+"DumpData_"+str(self.GetConfigValue("GatewayExecCount"))+"_" - Sinon ==> ""
+        self.LimitTcpSpeed=0          # Nb de 1/100 CPS autorisés sur sessions TCP [1200 = 1.2] - 0 = No limit       
+        self.LimitWsSpeed=0           # Nb de 1/100 CPS autorisés sur sessions WS  [1200 = 1.2] - 0 = No limit       
 
         # by tracking clients, we can write a 'kick' function and have a cleaner shutdown (in the case of the tcp server)
 
@@ -189,7 +194,9 @@ class GatewayServer:
 
         # Flag the server as running
         self._running = True
-
+        #
+        # Inits
+        #
         self.InitBanned()
         self.InitConfig()
         if self.GetConfigValue("DumpData")==True:
@@ -197,6 +204,15 @@ class GatewayServer:
         else:
           self.DumpFileBase=""
         #self.UpdateConfig()
+        if self.GetConfigValue("LimitTcpSpeed")=="":
+          self.LimitTcpSpeed=0         # Nb de 1/100 CPS autorisés sur sessions TCP [1200 = 1.2 - NoLimit = 0]
+        else:
+          self.LimitTcpSpeed=self.GetConfigValue("LimitTcpSpeed")        # Nb de 1/100 CPS autorisés sur sessions TCP [1200 = 1.2]
+        if self.GetConfigValue("LimitWsSpeed")=="":
+          self.LimitWsSpeed=0          # Nb de 1/100 CPS autorisés sur sessions WS [1200 = 1.2 - NoLimit = 0]
+        else:
+          self.LimitWsSpeed=self.GetConfigValue("LimitWsSpeed")          # Nb de 1/100 CPS autorisés sur sessions WS [1200 = 1.2]
+
 
         # We create a list of coroutines, since we might be running more
         # than just one if we have a TCP Server AND a WebSocketServer.
@@ -288,6 +304,7 @@ class GatewayServer:
         self.UserSessions[pid].MyAccess="Telnet"
         self.UserSessions[pid].MyStartTime=datetime.now()
         self.UserSessions[pid].MsgToDisplay("_register_tcp() Started for pid {} from {} at {}\r\n".format(pid,self.UserSessions[pid].MyIP,self.UserSessions[pid].MyStartTime.strftime("%Y-%m-%d %H:%M:%S")),self.UserSessions)
+        self.UserSessions[pid].SessionSentCPS=self.LimitTcpSpeed
 
         if len(self.DumpFileBase)>0:
           self.UserSessions[pid].MyDumpFile=self.DumpFileBase+str(pid)+".dmp"
@@ -398,6 +415,7 @@ class GatewayServer:
         self.UserSessions[pid].MyPort=str(writer.get_extra_info('peername')[1])
         self.UserSessions[pid].MyAccess="Display"
         self.UserSessions[pid].MyStartTime=datetime.now()
+        self.UserSessions[pid].SessionSentCPS=0
 
         # Now we create two coroutines, one for handling incoming messages, and one for handling outgoing messages.
 
@@ -993,19 +1011,43 @@ class GatewayServer:
           try:
             # Try to get a message from the Character's queue. This will block until the character receives a message.
             msg = await MySession.msgs.get()
-
+            print("GatewayServer.py->_outgoing_tcp() sizeof MySession.msgs():"+str(MySession.msgs.qsize()) + "  sizeof MySession.msgs.get():"+str(len(msg)))
+            # print("GatewayServer.py->_outgoing_tcp() sizeof MySession.msgs.get():"+str(len(msg)))
             if type(msg) != bytes:                # Si on a reçu des 'bytes', on ne ré-encode pas en unicode sur l'accès telnet (permet à Timtel de recevoir des codes 8 bits tout en laissant PyMinitel fonctionner en WS)
               msg = (msg).encode('latin-1')
-            writer.write(msg)
-            MySession.MyCharTotalSent+=len(msg)
-            MySession.MyCharSessionSent+=len(msg)
-
-            # Once we've written to a StreamWriter, we have to call
-            # writer.drain(), which blocks.
-            try:
-                await writer.drain()
-            # If the user disconnected, we will get an error. We will break and finish the coroutine.
+            if MySession.SessionSentCPS !=0:
+              IsRedirected=MySession.IsRedirected
+              for char in msg:            # char est un int
+                char=pack("B", char)      # on veut un byte-like
+                writer.write(char)        # (msg)
+                try:                      # Once we've written to a StreamWriter, we have to call writer.drain(), which blocks.
+                    await writer.drain()  # If the user disconnected, we will get an error. We will break and finish the coroutine.
+                except ConnectionResetError:
+                    print("GatewayServer.py->_outgoing_tcp() for char in msg: break with ConnectionResetError")
+                    break
+                MySession.MyCharTotalSent+=1 #len(msg)
+                MySession.MyCharSessionSent+=1 #len(msg)
+                MySession.MyCharSessionSentCPS+=1 #len(msg)
+                if MySession.MyCharSessionSentCPS>MySession.SessionSentCPS:
+                  #print("Sleep")
+                  await asyncio.sleep(0.01)
+                  MySession.MyCharSessionSentCPS-=MySession.SessionSentCPS
+                  if IsRedirected==True:
+                    if MySession.IsRedirected==False:
+                      print ("GatewayServer.py->_outgoing_tcp() redirection ended --> drop pending out chars")
+                      while MySession.msgs.qsize()>0:
+                        msg=await MySession.msgs.get()
+                        print("GatewayServer.py->_outgoing_tcp() sizeof dropped MySession.msgs.get():"+str(len(msg)))
+                      break
+            else:
+              writer.write(msg)
+              MySession.MyCharTotalSent+=len(msg)
+              MySession.MyCharSessionSent+=len(msg)
+              MySession.MyCharSessionSentCPS+=len(msg)
+            try:                                # Once we've written to a StreamWriter, we have to call writer.drain(), which blocks.
+                await writer.drain()            # If the user disconnected, we will get an error. We will break and finish the coroutine.
             except ConnectionResetError:
+                print("GatewayServer.py->_outgoing_tcp() while True: break with ConnectionResetError")
                 break
           except:
             err=sys.exc_info()
@@ -1111,6 +1153,7 @@ class GatewayServer:
         self.UserSessions[pid].MyAccess="WS"
         self.UserSessions[pid].MyStartTime=datetime.now()
         self.UserSessions[pid].MsgToDisplay("_register_ws() Started for pid {} from {} at {}\r\n".format(pid,self.UserSessions[pid].MyIP,self.UserSessions[pid].MyStartTime.strftime("%Y-%m-%d %H:%M:%S")),self.UserSessions)
+        self.UserSessions[pid].SessionSentCPS=self.LimitWsSpeed
 
         # WebSockets have a slightly different API than the tcp streams
         # rather than a reading and writing stream, which just have
@@ -1259,17 +1302,53 @@ class GatewayServer:
 
         while not websocket.closed:
             msg = await MySession.msgs.get()
+            print("GatewayServer.py->_outgoing_ws() sizeof MySession.msgs():"+str(MySession.msgs.qsize()) + "  sizeof MySession.msgs.get():"+str(len(msg)))
+            # print("GatewayServer.py->_outgoing_ws() sizeof MySession.msgs.get():"+str(len(msg)))
 
             # TODO: try to get more messages and buffer writes?
             try:
               if type(msg) == bytes:        # Cette astuce est nécessaire afin de permettre à l'émulation WS de Zigazou de fonctionner si des codes non-unicode sont transmis par le serveur
                   msg = str(msg,'latin-1')
-              await websocket.send(msg)
-              MySession.MyCharTotalSent+=len(msg)
-              MySession.MyCharSessionSent+=len(msg)
+              if MySession.SessionSentCPS !=0:
+                IsRedirected=MySession.IsRedirected
+                for char in msg:            # ?? char est un int
+                  #char=pack("B", char)      # on veut un byte-like
+                  #writer.write(char)        # (msg)
+                  await websocket.send(char)
+                  #try:                      # Once we've written to a StreamWriter, we have to call writer.drain(), which blocks.
+                  #    await writer.drain()  # If the user disconnected, we will get an error. We will break and finish the coroutine.
+                  #except ConnectionResetError:
+                  #    print("GatewayServer.py->_outgoing_tcp() for char in msg: break with ConnectionResetError")
+                  #    break
+                  MySession.MyCharTotalSent+=1 #len(msg)
+                  MySession.MyCharSessionSent+=1 #len(msg)
+                  MySession.MyCharSessionSentCPS+=1 #len(msg)
+                  if MySession.MyCharSessionSentCPS>MySession.SessionSentCPS:
+                    #print("Sleep")
+                    await asyncio.sleep(0.01)
+                    MySession.MyCharSessionSentCPS-=MySession.SessionSentCPS
+                    if IsRedirected==True:
+                      if MySession.IsRedirected==False:
+                        print ("GatewayServer.py->_outgoing_ws() redirection ended --> drop pending out chars")
+                        while MySession.msgs.qsize()>0:
+                          msg=await MySession.msgs.get()
+                          print("GatewayServer.py->_outgoing_ws() sizeof dropped MySession.msgs.get():"+str(len(msg)))
+                        break
+              else:
+                await websocket.send(msg)
+                MySession.MyCharTotalSent+=len(msg)
+                MySession.MyCharSessionSent+=len(msg)
+                #MySession.MyCharSessionSentCPS+=len(msg)
             except websockets.exceptions.ConnectionClosed:
                 print("GatewayServer.py->_outgoing_ws() : closed exception for %s",pid)
                 break
+
+
+
+
+
+
+
 
         print("GatewayServer.py->_outgoing_ws() : exiting - websocket is closed for %s",pid)
         logging.debug("GatewayServer.py->_outgoing_ws closed for %s", pid)
