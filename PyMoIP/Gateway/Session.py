@@ -37,6 +37,9 @@ class Session():
         self.MyCharSessionRecv=0
         self.MyCharSessionSent=0
         self.MyCharSessionRedir=0
+        self.MyCharSessionSentCPS=0    # Compteur pour limitation de vitesse de sortie
+        self.SessionSentCPS=0          # Nb de 1/100 CPS autorisés pour cette session ou 0 (no limit)
+
         self.MyStartTime=None
         self.MyDumpFile=""
         self.IsRedirected=False
