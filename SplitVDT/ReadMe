@@ -1,0 +1,10 @@
+SplitVDT.ps1
+
+Requires the module "Psini" (That should import/install automtically)
+
+Mass videotext pages import tool ... [PowerShell]
+- Many options are available in GUI
+- May import from a single big file (Will split into many pages)
+- May import from a many files from a given folder (Will split into many pages)
+- Keeps multiple configurations in a .ini file to allow replaying the imports
+
