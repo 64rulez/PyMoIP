@@ -8,3 +8,4 @@ Mass videotext pages import tool ... [PowerShell]
 - May import from a many files from a given folder (Will split into many pages)
 - Keeps multiple configurations in a .ini file to allow replaying the imports
 
+[Next revision will provide support for future 'PreviousLink' variable in arbo files]
