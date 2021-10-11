@@ -1,3 +1,7 @@
+
+NOTE : Replaced by https://github.com/64rulez/SplitVDT
+
+
 SplitVDT.ps1
 
 Requires the module "Psini" (That should import/install automtically)
