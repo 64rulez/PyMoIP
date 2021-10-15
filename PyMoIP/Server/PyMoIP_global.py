@@ -4,6 +4,7 @@
 
 DoDebugAsync   = False     # Affiche les infos de trace pour l'async
 DoDebugInput   = True     # Affiche les infos de trace pour l'async
+DoDebugOutput  = False    # Affiche les infos de trace pour l'async - Caracteres sortant
 
 
 if True:    # Constants
@@ -12,7 +13,10 @@ if True:    # Constants
     CHAR_ENQ  =chr(0x05)
     CHAR_BEEP =chr(0x07)
     CHAR_BS   =chr(0x08)
-    CHAR_VTAB =chr(0x0a)
+    CHAR_TAB  =chr(0x09)
+    CHAR_LF   =chr(0x0a)
+    CHAR_VTAB =chr(0x0b)
+    CHAR_FF   =chr(0x0c)
     CHAR_RC   =chr(0x0d)
     CHAR_CON  =chr(0x11)
     CHAR_REP  =chr(0x12)
@@ -83,6 +87,10 @@ if True:    # Constants
     LIST_SESSION_PVALIDE = 3
     LIST_SESSION_FROMGATEWAY  = 4
     LIST_SESSION_MYARBO  = 5
+    #
+    # Constantes pour l'arbo
+    #
+    ARBO_MAXFASTFORWARD = 101
     #
     # Constantes pour Arbo/StateRedir
     #

@@ -2,9 +2,13 @@
 # -*- coding: utf-8 -*-
 # PyMoIP_arbo class for PyMoIP_server
 
+# 23/08/2021 - Augmentation des traces pour Unknown BUG100% CPU [désactivé 08/09/21]
+
+
 import sys
 import asyncio
 import websockets
+import importlib
 from Server.PyMoIP_global import *
 
 DoEchoBufferInput  = True      # Effectue l'écho des caractères bufferisés
@@ -17,11 +21,13 @@ DoDebugField    = False        # Affiche les infos de trace pour les champs
 DoDebugTimer   = False         # Affiche les infos de trace pour le timer
 DoDebugAsync   = False         # Affiche les infos de trace pour l'async
 DoDebugUpdateDisplay = False   # Affiche les infos de trace pour UpdateDisplay()
-DoDebugInsertBytes = False     # Affiche les infos pour InsertBytes
-DoDebugRomRam=False            # Affiche les infos de décodage RomRam (dans AddItemToBuffer())
-DoDebugMainLoop=False
-DoDebugSetMessage=False        # Affiche les infos de SetMessage() 
+DoDebugInsertBytes = True     # Affiche les infos pour InsertBytes
+DoDebugRomRam=False            # Affiche les infos de décodage RomRam (dans AddItemToBuffer()) Unknown BUG100% CPU
+DoDebugMainLoop=False          # Unknown BUG100% CPU
+DoDebugSetMessage=True        # Affiche les infos de SetMessage() 
 DoDebugImport=False            # Mise en évidence du pb 'suite' sur module teletel - l'import retrouve toujours l'état de la variable - IE : liste avec append 
+DoDebugFastForward=False        # Avance rapide (N + SUITE)
+
 
 class Arbo:
     def __init__(self,ArboRoot,path_modules,MyGtw,loop,MySession,websocket,refs):
@@ -38,6 +44,7 @@ class Arbo:
         self.PostfixFile = ""               # Postfixe du nom des pages de la séquence (ex : _TEST.vdt pour une page qui serait nommée MENU_1_TEST.VDT)
         self.PageDir     = ""               # Répertoire où se trouve la séquence de pages pour cet emplacement de l'arborescence
         self.GuideLink   = ""
+        self.RetourLink  = ""
         self.TimeoutLink = ""
         self.TimerLink   = ""
         self.ConstList   = list()           # Ceci contient la liste des constantes à évaluer dynamiquement dans self.InsertPostBytes
@@ -66,6 +73,10 @@ class Arbo:
         self.NumPageDisplayList = bytearray()  # Numéro de page dans la liste (affichable)
         self.NumPagesDisplayList = bytearray() # Nombre de pages dans la liste (affichable)
         #
+        self.CrsrOnSent=True                # Envoyer Curseur OFF avant la page 
+        #
+        self.ArboLoop = 0                   # Boucler sur TimerLink ou RetourLink autant de fois que noté
+        #
         # Parse input bytes - Used only in EventRawReceived()
         #
         self.GotSep=False
@@ -86,6 +97,7 @@ class Arbo:
         self.BufferEcho = ""                # Buffer d'écho (saisie en cours, filtrée)
         #
         self.DebugInput = ""
+        self.DebugOutput = ""
         self.refs=refs
         self.GotLib      = False
         #
@@ -140,6 +152,7 @@ class Arbo:
         MoveArbo=True            # Boucle dans l'arborescence - si fichier arbo_xxxxxx.py manquant ou Bypass
         PrevArbo=self.ArboCur    # Emplacement actuel dans l'arbo, pour y revenir au cas d'erreur à destination (fichier arbo manquant)
         ErrorInArbo = False      # Passe à Vrai en cas d'erreur sur l'arbo 
+        _temp_Module_Args="Uninitialized"
                     
         while MoveArbo==True:
           MoveArbo=False
@@ -156,7 +169,7 @@ class Arbo:
             print("SetArbo() : __IMPORT__" + self.ArboRoot+"arbo_defaultvar")
           try:
             _tempDef = __import__(self.ArboRoot+"arbo_defaultvar", globals(), locals(), ['FirstFile', 'LastFile', 'PrefixFile', 'PostfiFile', 'PageDir', 
-                                        'GuideLink', 'TimeoutLink', 'TimertLink', 'ConstList', 'VarList', 'FieldList', 'DisplayList', 'MenuList', 'Module', 'BypassList', 'KeywordList', 'TimeoutLimit'], 0)
+                                        'GuideLink', 'RetourLink', 'TimeoutLink', 'TimertLink', 'ConstList', 'VarList', 'FieldList', 'DisplayList', 'MenuList', 'Module', 'BypassList', 'KeywordList', 'TimeoutLimit'], 0)
             if (DoDebugSetArbo==True):
               print("$Success arbo_defaultvar.py$")
           except:
@@ -174,6 +187,7 @@ class Arbo:
           self.PostfixFile = _tempDef.PostfixFile
           self.PageDir     = _tempDef.PageDir
           self.GuideLink   = _tempDef.GuideLink
+          self.RetourLink  = _tempDef.RetourLink
           self.TimeoutLink = _tempDef.TimeoutLink
           self.TimerLink   = _tempDef.TimerLink
           if DoDebugImport==True:
@@ -198,7 +212,7 @@ class Arbo:
             print("SetArbo() : __IMPORT__" + self.ArboRoot+self.ArboCur)
           try:
             _temp    = __import__(self.ArboRoot+self.ArboCur, globals(), locals(), ['FirstFile', 'LastFile', 'PrefixFile', 'PostfiFile', 'PageDir', 
-                                          'GuideLink', 'TimeoutLink', 'TimerLink', 'ConstList', 'VarList', 'FieldList', 'DisplayList', 'MenuList', 'Module', 'BypassList', 'KeywordList', 'TimeoutLimit', 'TimerDelay'], 0)
+                                          'GuideLink', 'RetourLink', 'TimeoutLink', 'TimerLink', 'ConstList', 'VarList', 'FieldList', 'DisplayList', 'MenuList', 'Module', 'BypassList', 'KeywordList', 'TimeoutLimit', 'TimerDelay'], 0)
             if (DoDebugSetArbo==True):
               print("$Success " + self.ArboCur + ".py $")
             del sys.modules[self.ArboRoot+self.ArboCur]  # Corrige le bug d'import
@@ -214,11 +228,12 @@ class Arbo:
             if ErrorInArbo ==False:
               ErrorInArbo = True      # Passe à Vrai en cas d'erreur sur l'arbo
               MoveArbo=True           # Essayer de revenir à l'emplacement de départ
+              self.ArboLoop = 0       # Annule toute boucle possible
               ArboCur=PrevArbo 
               if not self.StackList :
-                self.DebugInput += "$TopLevelReached$"
+                self.DebugInput += "$TopLevelReachedInSetArbo()$"
               else :                                       
-                self.StackList.pop()
+                ArboCur=self.StackList.pop()
 
               if (DoDebugSetArbo==True):
                 print("SetArbo() : Trying to loop back once after first error")
@@ -249,6 +264,10 @@ class Arbo:
             pass
           try:
             self.GuideLink   = _temp.GuideLink
+          except:
+            pass
+          try:
+            self.RetourLink   = _temp.RetourLink
           except:
             pass
           try:
@@ -354,6 +373,60 @@ class Arbo:
                     ArboCur=Bypass[3]                       
                 CountBypass+=1
 
+          if MoveArbo==False: # N'essaye pas de deplacement dans l'arbo un module si l'arbo est KO
+            if (self.ArboLoop != 0):
+              if DoDebugFastForward==True:
+                print("ArboLoop="+str(self.ArboLoop))
+              if (self.ArboLoop > 0) :
+                if (len(self.FieldList)<2) and (len(self.DisplayList)==0):
+                  if DoDebugFastForward==True:
+                    print("Avancer")
+                  self.CurFile  = self.CurFile + self.ArboLoop - 1    # Premiere page (dans une sequence de pages)
+                  if (self.CurFile > self.LastFile ):
+                    if DoDebugFastForward==True:
+                      print ("Passer au noeud suivant")
+                    self.ArboLoop = self.CurFile - (self.LastFile )
+                    if (len(self.TimerLink)>0):
+                        ArboCur = self.TimerLink
+                        MoveArbo=True
+                    else:
+                      if DoDebugFastForward==True:
+                        print("Impossible car pas de noeud suivant")
+                      self.ArboLoop=0
+                  else:
+                    self.ArboLoop=0
+                    if DoDebugFastForward==True:
+                      print("On est arrives") 
+                else:
+                  if DoDebugFastForward==True:
+                    print("ArboLoop >0 mais Liste ou Champ sur la page --> REFUSE")
+                  self.ArboLoop=0
+              else:
+                if (len(self.FieldList)<2) and (len(self.DisplayList)==0):
+                  if DoDebugFastForward==True:
+                    print("Reculer")
+                  self.CurFile  = self.LastFile    # Derniere page (dans une sequence de pages) 
+                  self.CurFile  = self.CurFile + self.ArboLoop    # Premiere page (dans une sequence de pages)
+                  if (self.CurFile < self.FirstFile ):
+                    if DoDebugFastForward==True:
+                      print ("Passer au noeud precedent")
+                    self.ArboLoop = self.CurFile + (self.FirstFile )
+                    if (len(self.RetourLink)>0):
+                        ArboCur = self.RetourLink
+                        MoveArbo=True
+                    else:
+                      if DoDebugFastForward==True:
+                        print("Impossible car pas de noeud suivant")
+                      self.ArboLoop=0
+                  else:
+                    self.ArboLoop=0
+                    if DoDebugFastForward==True:
+                      print("On est arrives") 
+                else:
+                  if DoDebugFastForward==True:
+                    print("ArboLoop <0 mais Liste ou Champ sur la page --> REFUSE")
+                  self.ArboLoop=0
+          
           if MoveArbo==False: # N'essaye pas de charger un module si l'arbo est KO
             try:
               if (DoDebugSetArbo==True):
@@ -377,9 +450,10 @@ class Arbo:
                 else:
                   _temp_Module_Args="NoArg"
                 _temp.Module=_temp.Module.split(",",2)[0]
-                self.Module      = __import__ (self.path_modules+_temp.Module)
                 if (DoDebugSetArbo==True):
                   print("__IMPORT__ trying to import _temp.Module '" + self.path_modules+_temp.Module + "' ....")
+                #self.Module      = __import__ (self.path_modules+_temp.Module)      # Old
+                self.Module      = importlib.import_module(self.path_modules+_temp.Module) # New
                 self.ModuleName=_temp.Module
                 if (DoDebugSetArbo==True):
                   print("__IMPORT__ '" + self.path_modules+_temp.Module + "' done.")
@@ -397,6 +471,9 @@ class Arbo:
                   _tempDef.Module=_tempDef.Module.split(",",2)[0]
                   self.Module=_tempDef.Module
                   self.ModuleName=_tempDef.Module
+                  #
+                  # N'essaye jamais d'importer le module 'par defaut' ... A revoir
+                  #
                   if (DoDebugSetArbo==True):
                     print("__IMPORT__ no module defined in '" + self.ArboCur + "'.")
                 else:
@@ -425,9 +502,11 @@ class Arbo:
     def CallModule(self,Touche,Comment):
       if type(self.Module) is str:
         if (DoDebugCallModule==True):
-          print("CallModule("+Touche+","+Comment+") module="+self.Module)
+          print("CallModule("+Touche+","+Comment+") module="+self.ModuleName+" is STR, not module")
       else:
-        if hasattr(self.Module, Touche) :
+        if (DoDebugCallModule==True):
+          print("CallModule("+Touche+","+Comment+") module="+self.ModuleName)
+        if hasattr(self.Module,Touche) :
           try:
             if (DoDebugCallModule==True):
               print("PyMoIP_arbo->CallModule("+Touche+")")
@@ -443,6 +522,9 @@ class Arbo:
                 #MyArbo.DoSendPage=True
             else: 
               #MyArbo.DoSendPage=True
+              self.UpdateCurField()              # Met à jour le champ en cours avec BufferInput puis vide BufferInput 
+              self.LoadBufferInputWithCurField() # Charge BufferInput avec le champ en cours
+              # self.UpdateField(self.FieldList[self.CurField][FIELD_NAME],self.MySession,"")  # Vide le champ en cours ==> Pourquoi si BufferInput n'est pas vidé ?
               self.RefreshCurField=True
               if (DoDebugCallModule==True):
                 print("$Called module failled with '" + Touche + "'$")
@@ -452,7 +534,15 @@ class Arbo:
             for item in err:
               print(item)
         else:
-          print("CallModule("+Touche+","+Comment+") fonction not found in module")
+          print("CallModule("+Touche+","+Comment+") fonction not found in module "+self.ModuleName)
+          print ("PathModules="+self.path_modules)
+          print ("ModuleName="+self.ModuleName)
+          print ("dir(self.Module):")
+          print (dir(self.Module))
+          print ("self.Module:")
+          print (self.Module)
+
+          
 
     def GetVarInArboClass(self,MyVarToGet,DontManageList=False):
       #print("GetVarInArboClass("+MyVar+")")
@@ -477,13 +567,12 @@ class Arbo:
       MyVarToFetch=MyVarToGet.split(",")[0]  # 
       MyVar=MyVarToFetch.split(":")[0]       # 
       if DoDebugGetVarInArboClass == True:
+        print("-=-=-=-=-=-=-")
         print("PyMoIP_arbo->GetVarInArboClass()")
-        print("MyVarToGet[0] =")
-        print(MyVarToGet.split(","))
-        print(MyVarToGet.split(",")[0])
-        print("MyVarToFetch =")
-        print(MyVarToFetch)
-        print(self.refs["refs_prefix"])
+        print("MyVarToFetch ='"+MyVarToFetch+"'")     # Premier item de MyVarToGet dans, par ex <MyVarToGet>=<MyVarToFetch>,<Param1>,<ParamN>
+        print("MyVar='"+MyVar+"'")                    # Nom de la variable extrait de MyVarToFetch dans, par ex <MyVarToFetch>=<MyVar>:<SubParam1>:<SubParamN>
+        print("refs_prefix='"+self.refs["refs_prefix"]+"'")
+        print("DontManageList='"+str(DontManageList)+"'")
         #try:
         #  print("refs[]")
         #  print(self.refs)
@@ -491,18 +580,35 @@ class Arbo:
         #  err=sys.exc_info()
         #  for item in err:
         #    print(item)
-      
+        print("----")
       try:   
-        if (MyVar[:1]=="*") :                                # (*) = Valeur globale
+        if (MyVar[:1]=="*") :                                                                    # (*) = Valeur 'globale', définies dans PyMoIP_server.py telles que NumSession, TotalSession, ListSession[], refs_prefix
+                                                                                                 # Inclus la classe 'Server', la classe 'Arbo', les imports globaux, =les modules sys, asyncio, websockets
+          if DoDebugGetVarInArboClass == True:
+            print("Search var in global :'"+MyVar[1:]+"'")
+          #print(self.refs)
           if MyVar[1:] in self.refs:
             MyTempVal = self.refs[MyVar[1:]]
           else:
-            MyTempVal = "Udef:*"+MyVar
-        elif (MyVar[:1]=="#") :                              # (#) = Valeur locale [Doit être défini en dur, quelque part => MySession / Ok, GotRom / Ko]
+            MyTempVal = "Udef:"+MyVar[1:]
+            if DoDebugGetVarInArboClass == True:
+              print("Var not found in global :'"+MyVar[1:]+"'")
+            #
+          #  
+        elif (MyVar[:1]=="#") :                                                                 # (#) = Valeur locale [Qui doit être définie en dur, quelque part =>  MyVar, MyVarToGet, MyVarToFetch, ParamLen 
+          if DoDebugGetVarInArboClass == True:
+            print("Search var in local :'"+MyVar[1:]+"'")
+          #print(vars())
           MyTempVal=vars().get(MyVar[1:],"Udef#:"+MyVar)
-        elif (MyVar[:1]=="%") :                              # (%) = Valeur dans l'objet (self)
+        elif (MyVar[:1]=="%") :                                                                 # (%) = Valeur dans l'objet arbo (self)
+          if DoDebugGetVarInArboClass == True:
+            print("Search var in self :'"+MyVar[1:]+"'")
+          #print(vars(self))
           MyTempVal=(vars(self).get(MyVar[1:],"Udef%:"+MyVar))
-        else:                                                # Valeur globale indexée sur session => 'Locale'
+        else:                                                                                      # Valeur globale indexée sur session => 'Locale'
+          if DoDebugGetVarInArboClass == True:
+            print("Search var in global with <refs_prefix>_<MyVar>_<MySession> :'"+MyVar+"'")  # Variables accessibles depuis toutes les sessions
+          #print(self.refs)
           if self.refs["refs_prefix"] + MyVar + "_" + str(self.MySession) in self.refs:
             MyTempVal = self.refs[self.refs["refs_prefix"] + MyVar + "_" + str(self.MySession)]
           else:
@@ -581,6 +687,7 @@ class Arbo:
         print(MyTempVal)
       return MyTempVal
       
+      
     def SetMessage(self,MyMessage, MyBeep, Immediate=False):
       if Immediate==True:
         if DoDebugSetMessage==True:
@@ -590,14 +697,16 @@ class Arbo:
       else:
         if MyMessage == CHAR_COFF or MyMessage == CHAR_CON:
           if MyMessage == CHAR_COFF :
+            self.CrsrOnSent=False 
             if DoDebugSetMessage==True:
               print("SetMessage(COFF)")
           elif MyMessage == CHAR_CON :
+            self.CrsrOnSent=True 
             if DoDebugSetMessage==True:
               print("SetMessage(CON)")
           self.InsertBytes += MyMessage.encode('utf-8') 
           if DoDebugInsertBytes == True:
-            print("SetMessage() : InsertBytes CON/COFF")
+            print("SetMessage() : InsertBytes CON/COFF CrsrOnSent="+str(self.CrsrOnSent))
         else:
           if DoDebugSetMessage==True:
             print("SetMessage("+MyMessage+")")
@@ -700,6 +809,8 @@ class Arbo:
         MyItemsPerPage=MyNbLin*MyNbCol
         if MyItemsPerPage>0:
           MyNbPage=len(MyList)//MyItemsPerPage
+          if MyNbPage*MyItemsPerPage!=len(MyList):
+            MyNbPage=MyNbPage+1
         else:
           MyNbPage=1    # La liste n'est pas affichée - Il n'y a pas de nombre de pages mais il y en a forcément une quand même 
           
@@ -708,7 +819,7 @@ class Arbo:
         if self.PageDisplayList > MyNbPage:
           self.PageDisplayList=MyNbPage
         self.NumPageDisplayList = (str(self.PageDisplayList+1)).encode('utf-8')
-        self.NumPagesDisplayList= (str(MyNbPage+1)).encode('utf-8')
+        self.NumPagesDisplayList= (str(MyNbPage)).encode('utf-8')
         if DoDebugList == True:
           print("Values in '" + self.DisplayList[LIST_NAME] + "'=")
           print(MyList)
@@ -855,9 +966,15 @@ class Arbo:
         print("self.CurField)="+str(self.CurField))        
         pass
       
+    def SetField(self,MyVar,MySession,MyBuffer):
+      print("SetField("  + MyVar + "," + str(MySession) + ",' MyBuffer ')")
+      self.refs[self.refs["refs_prefix"] + MyVar + "_" + str(MySession)] = MyBuffer
+      #print(refs[refs_prefix + MyVar + "_" + str(MySession)])
+
     def UpdateField(self,MyVar,MySession,MyBuffer):
       print("UpdateField("  + MyVar + "," + str(MySession) + ",'" + MyBuffer + "')")
-      self.refs[self.refs["refs_prefix"] + MyVar + "_" + str(MySession)] = MyBuffer.encode('utf-8')
+      self.SetField(MyVar,MySession,MyBuffer.encode('utf-8'))
+      #self.refs[self.refs["refs_prefix"] + MyVar + "_" + str(MySession)] = MyBuffer.encode('utf-8')
       #print(refs[refs_prefix + MyVar + "_" + str(MySession)])
     
     def UpdateCurField(self):
@@ -929,9 +1046,10 @@ class Arbo:
         #
       try:
         if type(item)==int:
-          print("WARN : AddItemToBufferNoRomRam() got int --> CHR("+str(item)+")")
+          print("WARN : AddItemToBufferNoRomRam() got INT type --> CHR()") # "+str(item)+"
           item=chr(item)
-        if item >= ' ':
+        #self.DebugInput += "<0x{:02x}> ".format(ord(item)) # A supprimer, affichage en double du caractère reçu : Unknown BUG100% CPU
+        if (item >= ' ') and (item <chr(0x80)):
             self.DebugInput += item
             self.AddItemToBufferNoRomRamNoLog(item)
         else:
@@ -962,7 +1080,7 @@ class Arbo:
         if type(item)==int:
           item=chr(item)
           if DoDebugRomRam==True:
-            print("WARN : AddItemToBuffer() got int --> CHR("+str(item)+")")
+            print("WARN : AddItemToBuffer() got int type --> CHR()") # "+str(item)+"
         if self.ReplyRomRamExpect > 0 :      # Si on prévoit de recevoir ROM/RAM
            if item == CHAR_SOH :                            # On se prépare à recevoir des éléments de ROM/RAM
              self.DebugInput += "[SOH]"
@@ -1155,6 +1273,15 @@ class Arbo:
         # Dans tous les cas, assure l'écho des caractères traités au passage précédent de la boucle principale dans AddItemToBufferNoRomRamNoLog() 
         #
         if self.DoSendPage==True:
+            if len(self.BufferEcho) :          # Envoyer l'echo avant la page (Si X + Fnct reçus dans le meme paquet)
+              self.InsertBytes.extend (self.BufferEcho.encode('utf-8'))
+              self.BufferEcho=""          
+            if (self.CrsrOnSent==True):
+              self.CrsrOnSent=False
+              self.InsertPostField.extend (CHAR_CON.encode('utf-8')) # Curseur ON
+              if DoDebugSetMessage==True:
+                print("UpdateDisplay(COFF,DoSendPage)")
+            
             #
             # La page complete est a envoyer
             #
@@ -1177,7 +1304,12 @@ class Arbo:
             # Puis le champ en cours de saisie
             if len(self.FieldList) >0 :    # Si au moins 1 champ 
               self.InsertPostField.extend (self.PresentFieldValue(self.FieldList[self.CurField]))
-              self.InsertPostField.extend (CHAR_CON.encode('utf-8')) # Curseur ON 
+              self.InsertPostField.extend (CHAR_CON.encode('utf-8')) # Curseur ON
+              self.CrsrOnSent=True 
+              if DoDebugSetMessage==True:
+                print("UpdateDisplay(CON,DoSendPage)")
+            else:
+              self.CrsrOnSent=False
             # Enfin, charger la page    
             try:
                 page=self.GetPage(self.PageDir + self.PrefixFile + str(self.CurFile) + self.PostfixFile)
@@ -1198,6 +1330,7 @@ class Arbo:
                 # await websocket.send(MyArbo.InsertBytes) # + page)
                 #await websocket.send((MyArbo.InsertBytes + page + MyArbo.InsertPostBytes + MyArbo.InsertPostField).decode('utf-8','strict'))
                 await self.websocket.send((self.InsertBytes + page + self.InsertPostBytes + self.InsertPostField))
+                self.DebugOutput += (self.InsertBytes + page + self.InsertPostBytes + self.InsertPostField).decode('utf-8','strict')
               else:
                 self.GotLib=True
             except (websockets.exceptions.ConnectionClosedOK , websockets.exceptions.ConnectionClosedError) :
@@ -1212,6 +1345,9 @@ class Arbo:
             self.RefreshCurField=False                       # Le champ en cours ete envoye, pas besoin de le re-afficher au prochain passage de la boucle, sauf si demande
 
         if self.RefreshCurField==True :
+          if len(self.BufferEcho) :          # Envoyer l'echo avant la page (Si X + Fnct reçus dans le meme paquet)
+              self.InsertBytes.extend (self.BufferEcho.encode('utf-8'))
+              self.BufferEcho=""          
           #
           # La page complete n'est pas a envoyer, seulement le champ en cours
           #
@@ -1229,12 +1365,16 @@ class Arbo:
             # Champ en cours de saisie
             self.InsertPostField.extend (self.PresentFieldValue(self.FieldList[self.CurField]))
             self.InsertPostField.extend (CHAR_CON.encode('utf-8')) # Curseur ON           
+            if DoDebugSetMessage==True:
+              print("UpdateDisplay(CON,RefreshCurField)")
+            self.CrsrOnSent=True
             #
             # Envoi du champ seul
             #
             try:
               if not self.websocket.closed:
                 await self.websocket.send((self.InsertBytes + self.InsertPostField).decode('utf-8','strict'))
+                self.DebugOutput += (self.InsertBytes + self.InsertPostField).decode('utf-8','strict')
               else:
                 self.GotLib=True
             except (websockets.exceptions.ConnectionClosedOK , websockets.exceptions.ConnectionClosedError) :
@@ -1242,6 +1382,8 @@ class Arbo:
               if DoDebugAsync == True: 
                 print("RefreshCurField cancelled [ClosedOK or ClosedError]")
               pass
+          else:
+            self.CrsrOnSent=False
 
             self.InsertBytes = bytearray()                 # Clear possible previous page content prefix
             if DoDebugInsertBytes == True:
@@ -1256,6 +1398,7 @@ class Arbo:
           try:
             if not self.websocket.closed:
               await self.websocket.send((self.BufferEcho.encode('utf-8')).decode('utf-8','strict'))
+              self.DebugOutput += (self.BufferEcho)
             else:
               self.GotLib=True
           except (websockets.exceptions.ConnectionClosedOK , websockets.exceptions.ConnectionClosedError) :
@@ -1435,6 +1578,273 @@ class Arbo:
           #print("Fin de KeepWaiting")
 
     async def EventRawReceived(self) :
+          def PRO2_CodeFonctionnement_to_strings(argument):
+            switcher = {
+                0x42: "80 colonnes",
+                0x43: "rouleau",
+                0x44: "PCE",
+                0x45: "minuscules",
+                0x46: "loupe haut",
+                0x47: "loupe bas"
+            }
+          def PROx_Aig_E_to_strings(argument):
+            switcher = {
+                0x50: "ecran emeteur",
+                0x51: "clavier emeteur",
+                0x52: "modem emeteur",
+                0x53: "prise emeteur",
+                0x54: "telephone emeteur",
+                0x55: "logiciel emeteur"
+            }
+            return switcher.get(argument, "")
+          def PROx_Aig_R_to_strings(argument):
+            switcher = {
+                0x58: "ecran recepteur",
+                0x59: "clavier recepteur",
+                0x5A: "modem recepteur",
+                0x5B: "prise recepteur",
+                0x5C: "telephone recepteur",
+                0x5D: "logiciel recepteur"
+            }
+            return switcher.get(argument, "")
+          def PRO3_MfClavier_to_strings(argument):
+            switcher = {
+                0x41: "clavier etendu",
+                0x42: "clavier normal"
+            }
+            return switcher.get(argument, "")
+          def PRO1_to_strings(argument):
+            switcher = {
+                0x50: "PRO1 Bis",
+                0x53: "PRO1 Decrochage",
+                0x54: "PRO1 Commutation donnees phonie",
+                0x57: "PRO1 Racrochage",
+                0x58: "PRO1 Coupure calibree",
+                0x59: "PRO1 Remise a zero",
+                0x5A: "PRO1 Demande status telephonique",
+                0x67: "PRO1 Deconnexion modem",
+                0x68: "PRO1 Connexion modem",
+                0x6C: "PRO1 Retournement modem",
+                0x6D: "PRO1 Retournement inverse",
+                0x6E: "PRO1 Acquitement retournement",
+                0x6F: "PRO1 Mode maitre retournement",
+                0x70: "PRO1 Demande status terminal",
+                0x72: "PRO1 Demande status fonctionnement",
+                0x74: "PRO1 Demande status vitesse",
+                0x76: "PRO1 Demande status protocole",
+                0x78: "PRO1 Telechargement RAM1",
+                0x79: "PRO1 Telechargement RAM2",
+                0x7A: "PRO1 Identification RAM1",
+                0x7B: "PRO1 Identification terminal",
+                0x7F: "PRO1 Reset videotext"
+            }
+            return switcher.get(argument, "PRO1 inconnu")
+
+
+          def PRO2_to_strings(argument1,argument2):
+            if argument1==0x31:
+              if argument2==0x7D:
+                return "PRO2 Mode teleinformatique"
+              else:
+                return "PRO2 Mode teleinformatique invalide"
+            elif argument1==0x32:
+              if argument2==0x7D:
+                return "PRO2 Mode videotext a mixte"
+              elif argument2==0x7E:
+                return "PRO2 Mode mixte a videotext"
+              else:
+                return "PRO2 Mode teleinformatique invalide"
+            elif argument1==0x55:
+              if argument2==0x4E:
+                return "PRO2 Commutation donnees phonie"
+              else:
+                return "PRO2 Commutation donnees phonie invalide"
+            elif argument1==0x5B:
+                return "PRO2 Reponse status telephonique <octet>"
+            elif argument1==0x62:
+                module=PROx_Aig_R_to_strings(argument2)
+                if module=="":
+                  module=PROx_Aig_E_to_strings(argument2)
+                  if module=="":
+                    return "PRO2 Demande status module invalide"
+                  else:
+                    return "PRO2 Demande status module emeteur "+module
+                else:
+                    return "PRO2 Demande status module recepteur "+module
+            elif argument1==0x64:
+                module=PROx_Aig_R_to_strings(argument2)
+                if module=="":
+                  module=PROx_Aig_E_to_strings(argument2)
+                  if module=="":
+                    return "PRO2 Non diffusion acquitements module invalide"
+                  else:
+                    return "PRO2 Non diffusion acquitements module emeteur "+module
+                else:
+                    return "PRO2 Non diffusion acquitements module recepteur "+module
+            elif argument1==0x65:
+                module=PROx_Aig_R_to_strings(argument2)
+                if module=="":
+                  module=PROx_Aig_E_to_strings(argument2)
+                  if module=="":
+                    return "PRO2 Diffusion acquitements module invalide"
+                  else:
+                    return "PRO2 Diffusion acquitements module emeteur "+module
+                else:
+                    return "PRO2 Diffusion acquitements module recepteur "+module
+            elif argument1==0x66:
+                return "PRO2 Transparence "+str(argument2)
+            elif argument1==0x69:
+                return "PRO2 Debut mode fonctionnement "+PRO2_CodeFonctionnement_to_strings(argument2)
+            elif argument1==0x6A:
+                return "PRO2 Debut mode fonctionnement "+PRO2_CodeFonctionnement_to_strings(argument2)
+            elif argument1==0x6B:
+                return "PRO2 Vitesse prise <CodeVitesse>"
+            elif argument1==0x6F:
+              if argument2==0x31:
+                return "PRO2 Mode esclave"
+              else:
+                return "PRO2 Mode esclave invalide"
+            elif argument1==0x71:
+              if argument2 & 0x01:
+                mode="oppose, "
+              else:
+                mode="non oppose, "
+              if argument2 & 0x02:
+                mode=mode+"reception 1200, "
+              else:
+                mode=mode+"reception 75, "
+              if argument2 & 0x04:
+                mode=mode+"module telephonique on, "
+              else:
+                mode=mode+"module telephonique off, "
+              if argument2 & 0x08:
+                mode=mode+"porteuse presente, "
+              else:
+                mode=mode+"porteuse absente, "
+              if argument2 & 0x10:
+                mode=mode+"fil PT actif, "
+              else:
+                mode=mode+"fil PT inactif, "
+              if argument2 & 0x20:
+                mode=mode+"module logiciel actif, "
+              else:
+                mode=mode+"module logiciel inactif, "
+              
+              return "PRO2 Reponse status terminal "+mode
+            elif argument1==0x72:
+              if argument2==0x59:
+                return "PRO2 Demande status clavier"
+              else:
+                return "PRO2 Demande status invalide"
+            elif argument1==0x73:
+              if (argument2 & 0x01)==0x01:
+                mode="80 colonnes, "
+              else:
+                mode="40 colonnes, "
+              if (argument2 & 0x02)==0x02:
+                mode=mode+"page, "
+              else:
+                mode=mode+"rouleau, "
+              if (argument2 & 0x04)==0x04:
+                mode=mode+"PCE, "
+              else:
+                mode=mode+"non PCE, "
+              if (argument2 & 0x08)==0x08:
+                mode=mode+"minuscules"
+              else:
+                mode=mode+"majuscules"
+              if (argument2 & 0x10)==0x10:
+                mode=mode+", loupe haute"
+              else:
+                mode=mode+", loupe basse"
+              if (argument2 & 0x20)==0x20:
+                mode=mode+", loupe active"
+              else:
+                mode=mode+", loupe inactive"
+              return "PRO2 Reponse status fonctionnement "+mode
+            elif argument1==0x75:
+              return "PRO2 Reponse status vitesse <octet>"
+            elif argument1==0x77:
+              return "PRO2 Reponse status protocole <octet>"
+            elif argument1==0x7C:
+              if argument2==0x6A:
+                return "PRO2 Copie ecran en jeu Francais"
+              elif argument2==0x6B:
+                return "PRO2 Copie ecran en jeu Americain"
+              else:
+                return "PRO2 Copie ecran invalide"
+            else:
+              return "PRO2 inconnu"
+
+
+          def PRO3_to_strings(argument1,argument2,argument3):
+            if argument1==0x52:
+              return "PRO3 Numerotation a partir de l'ecran ????"
+            elif argument1==0x60:
+              # PRO3 OFF <R> <E>
+              module_R=PROx_Aig_R_to_strings(argument2)
+              module_E=PROx_Aig_E_to_strings(argument3)
+              if module_R=="":
+                if module_E=="":
+                  return "PRO3 OFF <recepteur invalide> <emeteur invalide>" 
+              elif module_E=="":
+                  return "PRO3 OFF "+ module_R +" <emeteur invalide>" 
+              else:
+                  return "PRO3 OFF "+ module_R + module_E 
+            elif argument1==0x61:
+              # PRO3 ON <R> <E>
+              module_R=PROx_Aig_R_to_strings(argument2)
+              module_E=PROx_Aig_E_to_strings(argument3)
+              if module_R=="":
+                if module_E=="":
+                  return "PRO3 ON <recepteur invalide> <emeteur invalide>" 
+              elif module_E=="":
+                  return "PRO3 ON "+ module_R +" <emeteur invalide>" 
+              else:
+                  return "PRO3 ON "+ module_R + module_E 
+            elif argument1==0x63:
+              # PRO3 STATUS <R ou E> <octet>
+              module=PROx_Aig_R_to_strings(argument2)
+              if module!="":
+                return "PRO3 STATUS "+ module +" (reception) <octet>" 
+              else:
+                module=PROx_Aig_E_to_strings(argument2)
+                if module!="":
+                  return "PRO3 STATUS "+ module +" (emission) <octet>" 
+                else:
+                  return "PRO3 STATUS module invalide <octet>" 
+            elif argument1==0x69:
+              if argument2==0x59:
+                mode=PRO3_MfClavier_to_strings(argument3)
+                if mode=="":
+                  return "PRO3 Activation mode fonctionnement clavier invalide"
+                else:
+                  return "PRO3 Activation mode fonctionnement clavier "+mode
+              else:
+                return "PRO3 Activation mode fonctionnement invalide"
+            elif argument1==0x6A:
+              if argument2==0x59:
+                mode=PRO3_MfClavier_to_strings(argument3)
+                if mode=="":
+                  return "PRO3 Desactivation mode fonctionnement clavier invalide"
+                else:
+                  return "PRO3 Desactivation mode fonctionnement clavier "+mode
+              else:
+                return "PRO3 Desactivation mode fonctionnement invalide"
+            elif argument1==0x73:
+              if argument2==0x59:
+                mode=PRO3_MfClavier_to_strings(argument3)
+                if mode=="":
+                  return "PRO3 Reponse status fonctionnement clavier invalide"
+                else:
+                  return "PRO3 Reponse status fonctionnement clavier "+mode
+              else:
+                return "PRO3 Reponse status fonctionnement invalide"
+            else:
+              return "PRO3 inconnu"
+
+
+
           if self.RawReceived != None:
             if DoDebugMainLoop==True:
               print("EventRawReceived() Start")
@@ -1443,6 +1853,15 @@ class Arbo:
             # https://stackoverflow.com/questions/54421029/python-websockets-how-to-setup-connect-timeout
             for item in self.RawReceived:        # Analyse le paquet reçu
                 
+                if type(item)==int:                                    # A supprimer, affichage en double du caractère reçu : Unknown BUG100% CPU
+                  print("WARN : EventRawReceived() got INT type --> CHR()") # "+str(item)+"
+                  itemdebug=chr(item)
+                else:
+                  itemdebug=item
+                # self.DebugInput += "<<0x{:02x}>> ".format(ord(itemdebug)) # A supprimer, affichage en double du caractère reçu : Unknown BUG100% CPU
+
+
+
                 if item == CHAR_ESC:        # Annonce une sequence ESC
                     self.GotEsc=True
                 else:
@@ -1470,11 +1889,17 @@ class Arbo:
                             self.ProtocolSeq += item         # Ici aussi, il faudrait pouvoir traiter directement un code de contrôle [BUG!]
                             self.GotProSeq -=1
                             if self.GotProSeq == 0:
-                                self.BufferInput+=CHAR_ESC
-                                self.BufferInput+=chr(ord(CHAR_PRO1)+len(self.ProtocolSeq)-1)
+                                #self.BufferInput+=CHAR_ESC
+                                #self.BufferInput+=chr(ord(CHAR_PRO1)+len(self.ProtocolSeq)-1)
                                 for item in self.ProtocolSeq:
-                                    self.BufferInput+=item
+                                    #self.BufferInput+=item
                                     self.DebugInput += "<0x{:02x}> ".format(ord(item))
+                                if len(self.ProtocolSeq)==1:
+                                  self.DebugInput += PRO1_to_strings(ord(self.ProtocolSeq[0]))
+                                if len(self.ProtocolSeq)==2:
+                                  self.DebugInput += PRO2_to_strings(ord(self.ProtocolSeq[0]),ord(self.ProtocolSeq[1]))
+                                if len(self.ProtocolSeq)==3:
+                                  self.DebugInput += PRO3_to_strings(ord(self.ProtocolSeq[0]),ord(self.ProtocolSeq[1]),ord(self.ProtocolSeq[2]))
                         else:                       # On n'est pas dans le traitement d'une sequence protocole reçue
                             if self.GotCsi == True:
                                 self.GotCsiSeq += item         # Ici aussi, il faudrait pouvoir traiter directement un code de contrôle [BUG!]
@@ -1527,13 +1952,124 @@ class Arbo:
                                             #
                                             # Traitement des séquences de pages
                                             #
-                                            if self.CurFile==self.LastFile:
-                                                if self.CurFile==self.FirstFile:
+                                            if self.CurFile==self.LastFile:                          # Sur la derniere page
+                                                if self.CurFile==self.FirstFile:                     # Sur la premiere page ==> Une seule page
                                                     self.DebugInput += "$OnlyOnePage$"
+                                                    if (len(self.FieldList)<2) and (len(self.DisplayList)==0):  # On a au plus 1 seul champ et pas de liste
+                                                      self.ArboLoop = 0
+                                                      if (self.BufferInput.isdecimal()):                  # BufferInput contient une valeur decimale
+                                                        if (int(self.BufferInput) < ARBO_MAXFASTFORWARD):                 # qui reste acceptable
+                                                          if (len(self.TimerLink)>0) :
+                                                            self.ArboLoop = int(self.BufferInput)
+                                                          else:
+                                                            if DoDebugFastForward==True:
+                                                              print("SUITE depuis seule page sans TimerLink --> REFUSE")
+                                                        else:
+                                                          if (len(self.TimerLink)>0) :
+                                                            self.ArboLoop = 1
+                                                          else:
+                                                            if DoDebugFastForward==True:
+                                                              print("SUITE depuis seule page sans TimerLink --> REFUSE")
+                                                          if DoDebugFastForward==True:
+                                                            print("BufferInput contains too big value")
+                                                      else:
+                                                        if (len(self.TimerLink)>0) :
+                                                          self.ArboLoop = 1
+                                                        else:
+                                                          if DoDebugFastForward==True:
+                                                            print("SUITE depuis seule page sans TimerLink --> REFUSE")
+                                                        if DoDebugFastForward==True:
+                                                          print("BufferInput does not contains decimal value")
+                                                      if (self.ArboLoop != 0):
+                                                        self.SetArbo(self.TimerLink)
+                                                      self.CurFile=self.FirstFile
+                                                      self.DoSendPage=True
+                                                    else:
+                                                      if DoDebugFastForward==True:
+                                                        print("SUITE depuis seule page mais Liste ou Champ sur la page --> REFUSE")
+                                                else:                                                # Pas sur la premiere page ==> Il y a plusieurs pages
+                                                    if len(self.FieldList) >0 :    # Si au moins 1 champ 
+                                                      self.SetMessage(CHAR_COFF,False)
+
+                                                    if (len(self.FieldList)<2) and (len(self.DisplayList)==0):
+                                                      self.ArboLoop = 0
+                                                      if (self.BufferInput.isdecimal()):                  # BufferInput contient une valeur decimale
+                                                        if (int(self.BufferInput) < ARBO_MAXFASTFORWARD):                 # qui reste acceptable
+                                                          if (len(self.TimerLink)>0) :
+                                                            self.ArboLoop = int(self.BufferInput)
+                                                          else:
+                                                            if DoDebugFastForward==True:
+                                                              print("SUITE depuis derniere page sans TimerLink --> REFUSE")
+                                                        else:
+                                                          if (len(self.TimerLink)>0) :
+                                                            self.ArboLoop = 1
+                                                          else:
+                                                            if DoDebugFastForward==True:
+                                                              print("SUITE depuis derniere page sans TimerLink --> REFUSE")
+                                                          if DoDebugFastForward==True:
+                                                            print("BufferInput contains too big value")
+                                                      else:
+                                                        if (len(self.TimerLink)>0) :
+                                                          self.ArboLoop = 1
+                                                        else:
+                                                          if DoDebugFastForward==True:
+                                                            print("SUITE depuis derniere page sans TimerLink --> REFUSE")
+                                                        if DoDebugFastForward==True:
+                                                          print("BufferInput does not contains decimal value")
+                                                      if (self.ArboLoop != 0):
+                                                        self.SetArbo(self.TimerLink)                                                          
+                                                        if DoDebugFastForward==True:
+                                                          print("SUITE sur derniere page - On a changes de noeud - ArboLoop="+str(self.ArboLoop)+" CurFile="+str(self.CurFile))
+                                                      else:
+                                                        self.CurFile=self.FirstFile
+                                                        self.DoSendPage=True
+                                                    else:
+                                                      self.CurFile=self.FirstFile
+                                                      self.DoSendPage=True
+                                                      if DoDebugFastForward==True:
+                                                        print("SUITE depuis derniere page mais Liste ou Champ sur la page --> REFUSE")
+                                            else:                                                  # Pas sur la derniere page ==> Il y a plusieurs pages
+                                                if len(self.FieldList) >0 :    # Si au moins 1 champ 
+                                                  self.SetMessage(CHAR_COFF,False)
+                                                if (len(self.FieldList)<2) and (len(self.DisplayList)==0):
+                                                  if (self.BufferInput.isdecimal()):                  # BufferInput contient une valeur decimale
+                                                    if (int(self.BufferInput) < ARBO_MAXFASTFORWARD):                 # qui reste acceptable
+                                                      #
+                                                      # Avancer dans la sequence avant de changer de noeud d'arbo (ToDo)
+                                                      #                                           
+                                                      self.ArboLoop = int(self.BufferInput)
+                                                      self.CurFile += self.ArboLoop
+                                                      self.ArboLoop -= self.ArboLoop - (self.CurFile - self.LastFile)
+                                                      if (self.CurFile > self.LastFile):
+                                                        if (len(self.TimerLink)>0) :
+                                                          self.SetArbo(self.TimerLink)
+                                                          self.CurFile -= 1
+                                                          if DoDebugFastForward==True:
+                                                            print("SUITE pas sur derniere page - On a changes de noeud - ArboLoop="+str(self.ArboLoop)+" CurFile="+str(self.CurFile))
+                                                        else:
+                                                          if DoDebugFastForward==True:
+                                                            print("SUITE depuis page quelconque sans TimerLink --> REFUSE")
+                                                          while (self.ArboLoop > 0) and (self.CurFile > self.LastFile):
+                                                            self.CurFile  = self.FirstFile + self.ArboLoop
+                                                            self.ArboLoop -= self.ArboLoop - (self.CurFile - self.LastFile)                                                                                                                      
+                                                            if DoDebugFastForward==True:
+                                                              print("SUITE pas sur derniere page - On boucle sur le noeud - ArboLoop="+str(self.ArboLoop)+" CurFile="+str(self.CurFile))
+                                                          self.ArboLoop = 0
+                                                          self.CurFile -= 1
+                                                      else:
+                                                        self.ArboLoop = 0
+                                                        self.CurFile -= 1
+                                                        if DoDebugFastForward==True:
+                                                          print("SUITE pas sur derniere page - On reste sur le noeud - ArboLoop="+str(self.ArboLoop)+" CurFile="+str(self.CurFile))
+                                                    else:
+                                                      if DoDebugFastForward==True:
+                                                        print("BufferInput contains too big value")
+                                                  else:
+                                                    if DoDebugFastForward==True:
+                                                      print("BufferInput does not contains decimal value")
                                                 else:
-                                                    self.CurFile=self.FirstFile
-                                                    self.DoSendPage=True
-                                            else:
+                                                  if DoDebugFastForward==True:
+                                                    print("SUITE depuis une page quelconque mais Liste ou Champ sur la page --> REFUSE")
                                                 self.DoSendPage=True
                                                 self.CurFile+=1
                                             #
@@ -1561,8 +2097,27 @@ class Arbo:
                                             #
                                             if len(self.DisplayList) :
                                               self.PageDisplayList += 1
+
+                                              MyList=self.GetVarInArboClass(self.DisplayList[LIST_NAME],True)
+                                              MyNbLin=self.DisplayList[LIST_NB_LIN]          # Définition des champs de la liste
+                                              MyNbCol=self.DisplayList[LIST_NB_COL]          # Définition des champs de la liste      
+                                              MyItemsPerPage=MyNbLin*MyNbCol
+                                              if MyItemsPerPage>0:
+                                                MyNbPage=len(MyList)//MyItemsPerPage
+                                                if MyNbPage*MyItemsPerPage!=len(MyList):
+                                                  MyNbPage=MyNbPage+1
+                                              else:
+                                                MyNbPage=1    # La liste n'est pas affichée - Il n'y a pas de nombre de pages mais il y en a forcément une quand même 
+                                              if self.PageDisplayList >= MyNbPage:
+                                                self.PageDisplayList=MyNbPage
+                                              else:
+                                                self.DoSendPage=True
+
+
+
+
                                             #
-                                            # Traiteent des modules
+                                            # Traitement des modules
                                             #
                                             self.CallModule('suite',"Comment Suite")
     
@@ -1576,10 +2131,28 @@ class Arbo:
                                             if self.CurFile==self.FirstFile:
                                                 if self.CurFile==self.LastFile:
                                                     self.DebugInput += "$OnlyOnePage$"
+                                                    if (len(self.RetourLink)>0) :
+                                                      if len(self.FieldList) >0 :    # Si au moins 1 champ 
+                                                        self.SetMessage(CHAR_COFF,False)
+                                                      if (len(self.FieldList)<2) and (len(self.DisplayList)==0):
+                                                        self.SetArbo(self.RetourLink)
+                                                        self.CurFile=self.LastFile
+                                                        self.DoSendPage=True
+                                                      else:
+                                                        print("RETOUR depuis seule page avec RetourLink mais Liste ou Champ sur la page --> REFUSE")
                                                 else:
+                                                    if (len(self.RetourLink)>0) :
+                                                      if len(self.FieldList) >0 :    # Si au moins 1 champ 
+                                                        self.SetMessage(CHAR_COFF,False)
+                                                      if (len(self.FieldList)<2) and (len(self.DisplayList)==0):
+                                                        self.SetArbo(self.RetourLink)
+                                                      else:
+                                                        print("RETOUR depuis premiere page avec RetourLink mais Liste ou Champ sur la page --> REFUSE")
                                                     self.CurFile=self.LastFile
                                                     self.DoSendPage=True
                                             else:
+                                                if len(self.FieldList) >0 :    # Si au moins 1 champ 
+                                                  self.SetMessage(CHAR_COFF,False)
                                                 self.DoSendPage=True
                                                 self.CurFile-=1
                                             #
@@ -1604,6 +2177,10 @@ class Arbo:
                                             #
                                             if len(self.DisplayList) :
                                               self.PageDisplayList -= 1
+                                              if self.PageDisplayList <= 0:
+                                                self.PageDisplayList = 0
+                                              else:
+                                                self.DoSendPage=True
                                             #
                                             # Traitement des modules
                                             #
@@ -1711,6 +2288,7 @@ class Arbo:
                                             if len(self.FieldList) and (self.DoSendPage==True):
                                               self.UpdateField(self.FieldList[self.CurField][FIELD_NAME],self.MySession,"")
                                               self.ClearBufferInput()
+                                              self.DebugInput += "$BufferCleared$"
                                             #
                                             # Traitement des modules
                                             #
@@ -1779,12 +2357,19 @@ class Arbo:
             # Timer
             #
             if (not self.websocket.closed) and (not self.GotLib==True):
+              #
+              # Traitement des séquences de pages
+              #
+              if self.CurFile < self.LastFile:
+                  self.DoSendPage=True
+                  self.CurFile+=1
               self.TimerCount+=1
               self.CallModule('timer',"Comment Timer "+str(self.TimerCount))
               self.DebugInput += "[TIMER]"
-              if len(self.TimerLink)>0:
+              if self.DoSendPage!=True:
+                if len(self.TimerLink)>0:
                   self.SetArbo(self.TimerLink)
-              else:
+                else:
                   self.DebugInput += "$NoTimerDefined$"
               #
               # Traitement du champ

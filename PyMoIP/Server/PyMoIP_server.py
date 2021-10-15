@@ -1,5 +1,8 @@
-#!/usr/bin/envh python
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 # PyMoIP_server.py
+
+# 23/08/2021 - Augmentation des traces pour Unknown BUG100% CPU
 
 import sys
 import asyncio
@@ -137,7 +140,7 @@ class Server:
             try:
               await MyArbo.UpdateDisplay()
             except:
-                print("ERROR : await UpdateDisplay()")
+                print("ERROR MAIN LOOP : after await UpdateDisplay()")
                 err=sys.exc_info()
                 for item in err:
                   print(item)
@@ -145,7 +148,7 @@ class Server:
             try:
               await MyArbo.UpdateTimer()
             except:
-                print("ERROR : await UpdateTimer()")
+                print("ERROR MAIN LOOP : after await UpdateTimer()")
                 err=sys.exc_info()
                 for item in err:
                   print(item)
@@ -153,7 +156,7 @@ class Server:
             try:
               await MyArbo.WaitEvent()
             except:
-                print("ERROR : await WaitEvent()")
+                print("ERROR MAIN LOOP : after await WaitEvent()")
                 err=sys.exc_info()
                 for item in err:
                   print(item)
@@ -161,7 +164,7 @@ class Server:
             try:        
               await MyArbo.EventRawReceived()  # Needs await as it possibly sends data
             except:
-                print("ERROR : await EventRawReceived()")
+                print("ERROR MAIN LOOP : after await EventRawReceived()")
                 err=sys.exc_info()
                 for item in err:
                   print(item)
@@ -169,7 +172,7 @@ class Server:
             try:
               MyArbo.EventMsg()
             except:
-                print("ERROR : NOawait EventMsgReceived()")
+                print("ERROR MAIN LOOP : after EventMsg()")
                 err=sys.exc_info()
                 for item in err:
                   print(item)
@@ -177,19 +180,19 @@ class Server:
             try:
               MyArbo.EventTimer()
             except:
-                print("ERROR : NOawait EventTimer()")
+                print("ERROR MAIN LOOP : after EventTimer()")
                 err=sys.exc_info()
                 for item in err:
                   print(item)
                 raise
             try:
               if (MyArbo.MsgReceived == None) and (  MyArbo.RawReceived == None) and (MyArbo.TimerReceived == None):
-                #print("--Timeout--")
+                #print("--TimeoutEvent in MAIN LOOP ?--")
                 #print(ListSession)
                 pass
               MyArbo.EventTimeout()
             except:
-                print("ERROR : NOawait EventTimeout()")
+                print("ERROR MAIN LOOP : after EventTimeout()")
                 err=sys.exc_info()
                 for item in err:
                   print(item)
@@ -198,7 +201,7 @@ class Server:
           # Bloc TRY depuis WaitEvent, incluant le traitement des évènements
           #
           except (websockets.exceptions.ConnectionClosedOK , websockets.exceptions.ConnectionClosedError) :
-            print ("ERR:Main.recv() "+str(sys.exc_info()[0])+" "+str(sys.exc_info()[1])+" "+str(sys.exc_info()[2]))
+            print ("ERR:Main.recv(Closed) "+str(sys.exc_info()[0])+" "+str(sys.exc_info()[1])+" "+str(sys.exc_info()[2]))
             #
             # Traitement des modules
             #
@@ -206,14 +209,35 @@ class Server:
             MyArbo.GotLib=True
             MyArbo.DebugInput+=str(sys.exc_info()[0])+" "+str(sys.exc_info()[1])
             pass
-          if len (MyArbo.DebugInput) > 0:
-              if DoDebugInput==True:
-                print(f"SERVER GOT '{MyArbo.DebugInput}'")
-              MyArbo.DebugInput=""
+          except:
+            print ("ERR:Main.recv(Unknown BUG100% CPU) "+str(sys.exc_info()[0])+" "+str(sys.exc_info()[1])+" "+str(sys.exc_info()[2]))
+            #
+            # Traitement des modules
+            #
+            MyArbo.CallModule('lib',"Unknown")
+            MyArbo.GotLib=True
+            MyArbo.DebugInput+=str(sys.exc_info()[0])+" "+str(sys.exc_info()[1])
+            pass
+          finally:
+            if len (MyArbo.DebugInput) > 0:
+                if DoDebugInput==True:
+                  print(f"[{MySession}] SERVER GOT '{MyArbo.DebugInput}'")
+                MyArbo.DebugInput=""
+            if len (MyArbo.DebugOutput) > 0:
+                if DoDebugOutput==True:
+                  print(f"[{MySession}] SERVER SENT")
+                  HexStr=""
+                  for char in MyArbo.DebugOutput:
+                    if (ord(char)>=32):
+                      HexStr+=char
+                    else:
+                      HexStr+=" x{0:02x} ".format(ord(char))
+                  print(HexStr)
+                MyArbo.DebugOutput=""
       #
       # Fin de la boucle principale - Ici, GotLib=True
       #
-      print(f"SERVER GOT '{MyArbo.DebugInput}' EXITING")
+      print(f"[{MySession}] SERVER GOT '{MyArbo.DebugInput}' EXITING")
       #
       # Traitement des modules
       #
