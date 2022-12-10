@@ -1,6 +1,10 @@
 # PyMoIP
 Python "Modem over IP" for Minitel
 
+Updated 12/2022 :
+- Parts of the wiki
+- Created Drawio documentation [General connection diagram and data flows]
+
 Updated 08/2021 :
 - Gateway code (Current version in PyMoIP/Gateway folder - Previous version (06/2021) in PyMoIP/gateway to be removed)
 - Server code (Current version in PyMoIP/Server folder - Previous version (06/2021) in PyMoIP/ServerMode to be removed)
